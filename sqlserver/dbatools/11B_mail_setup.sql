@@ -4,11 +4,6 @@
 -- GitHub:  https://github.com/Thalionn/db-scripts
 -- License: MIT License - Free to use, just credit the author.
 -- ============================================================================
--- Script: 11B_mail_setup.sql
--- Purpose: Database Mail configuration template
--- Usage:   Run on each SQL Server instance as sysadmin
--- Notes:   MODIFY THE VALUES BELOW to match your SMTP server
--- ============================================================================
 
 USE msdb;
 GO

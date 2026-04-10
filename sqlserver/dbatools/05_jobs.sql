@@ -4,11 +4,6 @@
 -- GitHub:  https://github.com/Thalionn/db-scripts
 -- License: MIT License - Free to use, just credit the author.
 -- ============================================================================
--- Script: 05_jobs.sql
--- Purpose: Create SQL Agent jobs for data collection
--- Usage:   Run after 04_functions.sql on each SQL Server
--- Notes:   Adjust schedules to match your environment
--- ============================================================================
 
 USE msdb;
 GO

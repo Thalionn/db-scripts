@@ -3,11 +3,6 @@
 -- Author:  Andrew Reischl
 -- GitHub:  https://github.com/Thalionn/db-scripts
 -- License: MIT License - Free to use, just credit the author.
--- ============================================================================
--- Script: 08_index_maintenance_job.sql
--- Purpose: Scheduled index maintenance job
--- Usage:   Customize thresholds for your environment
--- ============================================================================
 
 USE msdb;
 GO

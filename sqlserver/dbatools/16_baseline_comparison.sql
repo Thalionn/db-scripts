@@ -4,11 +4,6 @@
 -- GitHub:  https://github.com/Thalionn/db-scripts
 -- License: MIT License - Free to use, just credit the author.
 -- ============================================================================
--- Script: 16_baseline_comparison.sql
--- Purpose: Compare current performance against historical baseline
--- Usage:   Run weekly for trend analysis; update baseline quarterly
--- Notes:   First run establishes baseline; subsequent runs compare
--- ============================================================================
 
 USE DBATools;
 GO

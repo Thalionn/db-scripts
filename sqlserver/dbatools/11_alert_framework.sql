@@ -3,11 +3,6 @@
 -- Author:  Andrew Reischl
 -- GitHub:  https://github.com/Thalionn/db-scripts
 -- License: MIT License - Free to use, just credit the author.
--- ============================================================================
--- Script: 11_alert_framework.sql
--- Purpose: Database Mail and Alert configuration
--- Usage:   Run after 00_create_database.sql
--- Notes:   IMPORTANT: Configure Database Mail first!
 --          See 11B_mail_setup.sql for mail configuration
 -- ============================================================================
 

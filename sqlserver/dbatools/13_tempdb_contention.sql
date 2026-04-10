@@ -4,11 +4,6 @@
 -- GitHub:  https://github.com/Thalionn/db-scripts
 -- License: MIT License - Free to use, just credit the author.
 -- ============================================================================
--- Script: 13_tempdb_contention.sql
--- Purpose: TempDB contention monitoring
--- Usage:   Run during performance issues to identify tempdb bottlenecks
--- Notes:   PFS, GAM, and SGAM latch waits indicate contention
--- ============================================================================
 
 USE DBATools;
 GO

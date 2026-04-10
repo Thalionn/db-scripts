@@ -3,11 +3,6 @@
 -- Author:  Andrew Reischl
 -- GitHub:  https://github.com/Thalionn/db-scripts
 -- License: MIT License - Free to use, just credit the author.
--- ============================================================================
--- Script: 03_views.sql
--- Purpose: Utility views for DBATools
--- Usage:   Run after 02_procedures.sql for quick diagnostics
--- ============================================================================
 
 USE DBATools;
 GO

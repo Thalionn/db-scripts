@@ -4,11 +4,6 @@
 -- GitHub:  https://github.com/Thalionn/db-scripts
 -- License: MIT License - Free to use, just credit the author.
 -- ============================================================================
--- Script: 09_security_audit.sql
--- Purpose: Security audit tables and procedures
--- Usage:   Run after 01_tables.sql; schedule 09B_audit_jobs.sql separately
--- Notes:   Tracks login/role/permission changes for compliance
--- ============================================================================
 
 USE DBATools;
 GO

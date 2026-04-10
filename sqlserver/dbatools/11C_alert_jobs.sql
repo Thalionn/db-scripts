@@ -4,11 +4,6 @@
 -- GitHub:  https://github.com/Thalionn/db-scripts
 -- License: MIT License - Free to use, just credit the author.
 -- ============================================================================
--- Script: 11C_alert_jobs.sql
--- Purpose: Schedule alert check jobs
--- Usage:   Run after 11B_mail_setup.sql (mail must be configured)
--- Notes:   Adjust email recipients for your environment
--- ============================================================================
 
 USE msdb;
 GO

@@ -3,11 +3,6 @@
 -- Author:  Andrew Reischl
 -- GitHub:  https://github.com/Thalionn/db-scripts
 -- License: MIT License - Free to use, just credit the author.
--- ============================================================================
--- Script: 04_functions.sql
--- Purpose: Utility functions for DBATools
--- Usage:   Helper functions for calculations and formatting
--- ============================================================================
 
 USE DBATools;
 GO

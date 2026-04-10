@@ -4,11 +4,6 @@
 -- GitHub:  https://github.com/Thalionn/db-scripts
 -- License: MIT License - Free to use, just credit the author.
 -- ============================================================================
--- Script: 14_ag_replica_health.sql
--- Purpose: Availability Group health monitoring
--- Usage:   Run on primary replica; schedule for regular health checks
--- Notes:   Requires VIEW ANY DEFINITION permission or sysadmin
--- ============================================================================
 
 USE DBATools;
 GO
