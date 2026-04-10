@@ -1,0 +1,26 @@
+# Environment and config files
+*.env
+*.local
+*.config
+config/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# Logs
+*.log
+logs/
+
+# Temp files
+*.tmp
+*.bak
+*.bakup
