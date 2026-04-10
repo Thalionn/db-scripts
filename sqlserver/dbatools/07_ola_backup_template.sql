@@ -1,4 +1,9 @@
 -- ============================================================================
+-- Copyright (c) 2026 Andrew Reischl. All rights reserved.
+-- Author:  Andrew Reischl
+-- GitHub:  https://github.com/Thalionn/db-scripts
+-- License: MIT License - Free to use, just credit the author.
+-- ============================================================================
 -- Script: 07_ola_backup_template.sql
 -- Purpose: Template for integrating Ola Hallengren's backup solution
 -- Usage:   Customize for your environment, run on each instance

@@ -1,4 +1,9 @@
 -- ============================================================================
+-- Copyright (c) 2026 Andrew Reischl. All rights reserved.
+-- Author:  Andrew Reischl
+-- GitHub:  https://github.com/Thalionn/db-scripts
+-- License: MIT License - Free to use, just credit the author.
+-- ============================================================================
 -- Script: 06_login_trigger.sql
 -- Purpose: Server-level trigger for login auditing
 -- Usage:   Run after 05_jobs.sql - enables login tracking

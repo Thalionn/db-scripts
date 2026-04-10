@@ -1,4 +1,9 @@
 -- ============================================================================
+-- Copyright (c) 2026 Andrew Reischl. All rights reserved.
+-- Author:  Andrew Reischl
+-- GitHub:  https://github.com/Thalionn/db-scripts
+-- License: MIT License - Free to use, just credit the author.
+-- ============================================================================
 -- Script: 09B_security_jobs.sql
 -- Purpose: Schedule security audit collection jobs
 -- Usage:   Run after 09_security_audit.sql

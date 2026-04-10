@@ -1,4 +1,9 @@
 -- ============================================================================
+-- Copyright (c) 2026 Andrew Reischl. All rights reserved.
+-- Author:  Andrew Reischl
+-- GitHub:  https://github.com/Thalionn/db-scripts
+-- License: MIT License - Free to use, just credit the author.
+-- ============================================================================
 -- Script: 00_create_database.sql
 -- Purpose: Create DBATools monitoring database
 -- Usage:   Run as sysadmin on each SQL Server instance

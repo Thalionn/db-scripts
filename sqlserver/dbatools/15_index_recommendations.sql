@@ -1,4 +1,9 @@
 -- ============================================================================
+-- Copyright (c) 2026 Andrew Reischl. All rights reserved.
+-- Author:  Andrew Reischl
+-- GitHub:  https://github.com/Thalionn/db-scripts
+-- License: MIT License - Free to use, just credit the author.
+-- ============================================================================
 -- Script: 15_index_recommendations.sql
 -- Purpose: Generate missing/high-value index recommendations
 -- Usage:   Run weekly during off-peak; review before implementing
