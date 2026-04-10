@@ -1,0 +1,109 @@
+<mxlibrary title="Database Architecture Shapes" description="Standard shapes for database and infrastructure diagrams">
+  
+  <!-- SQL Server Icon -->
+  <shape name="SQL Server" w="64" h="64" aspect="fixed">
+    <background-color>#FF5722</background-color>
+    <border-color>#E64A19</border-color>
+    <border-width>2</border-width>
+    <foreground-color>#FFFFFF</foreground-color>
+  </shape>
+  
+  <!-- PostgreSQL Icon -->
+  <shape name="PostgreSQL" w="64" h="64" aspect="fixed">
+    <background-color>#336791</background-color>
+    <border-color>#2A5783</border-color>
+    <border-width>2</border-width>
+    <foreground-color>#FFFFFF</foreground-color>
+  </shape>
+  
+  <!-- MySQL Icon -->
+  <shape name="MySQL" w="64" h="64" aspect="fixed">
+    <background-color>#00758F</background-color>
+    <border-color>#005F75</border-color>
+    <border-width>2</border-width>
+    <foreground-color>#FFFFFF</foreground-color>
+  </shape>
+  
+  <!-- Oracle Icon -->
+  <shape name="Oracle" w="64" h="64" aspect="fixed">
+    <background-color>#F80000</background-color>
+    <border-color>#D00000</border-color>
+    <border-width>2</border-width>
+    <foreground-color>#FFFFFF</foreground-color>
+  </shape>
+  
+  <!-- MongoDB Icon -->
+  <shape name="MongoDB" w="64" h="64" aspect="fixed">
+    <background-color>#47A248</background-color>
+    <border-color>#3D8A3C</border-color>
+    <border-width>2</border-width>
+    <foreground-color>#FFFFFF</foreground-color>
+  </shape>
+  
+  <!-- Redis Icon -->
+  <shape name="Redis" w="64" h="64" aspect="fixed">
+    <background-color>#DC382D</background-color>
+    <border-color>#B82C26</border-color>
+    <border-width>2</border-width>
+    <foreground-color>#FFFFFF</foreground-color>
+  </shape>
+  
+  <!-- Kafka Icon -->
+  <shape name="Kafka" w="64" h="64" aspect="fixed">
+    <background-color>#231F20</background-color>
+    <border-color>#1A1718</border-color>
+    <border-width>2</border-width>
+    <foreground-color>#FFFFFF</foreground-color>
+  </shape>
+  
+  <!-- Container/Kubernetes Icon -->
+  <shape name="Container" w="64" h="64" aspect="fixed">
+    <background-color=#326CE5</background-color>
+    <border-color=#2954B8</border-color>
+    <border-width>2</border-width>
+    <foreground-color=#FFFFFF</foreground-color>
+  </shape>
+  
+  <!-- VM Icon -->
+  <shape name="VM" w="80" h="60" aspect="fixed">
+    <background-color>#78909C</background-color>
+    <border-color>#607D8B</border-color>
+    <border-width>2</border-width>
+    <foreground-color>#FFFFFF</foreground-color>
+    <rounded-corners>8</rounded-corners>
+  </shape>
+  
+  <!-- Firewall Icon -->
+  <shape name="Firewall" w="60" h="50" aspect="fixed">
+    <background-color=#FF9800</background-color>
+    <border-color=#F57C00</border-color>
+    <border-width>2</border-width>
+    <foreground-color=#FFFFFF</foreground-color>
+    <rounded-corners>6</rounded-corners>
+  </shape>
+  
+  <!-- Cache Icon -->
+  <shape name="Cache" w="50" h="50" aspect="fixed">
+    <background-color=#FFEB3B</background-color>
+    <border-color=#FBC02D</border-color>
+    <border-width>2</border-width>
+    <foreground-color=#212121</foreground-color>
+  </shape>
+  
+  <!-- Backup Icon -->
+  <shape name="Backup" w="50" h="50" aspect="fixed">
+    <background-color=#8BC34A</background-color>
+    <border-color=#7CB342</border-color>
+    <border-width>2</border-width>
+    <foreground-color=#FFFFFF</foreground-color>
+  </shape>
+  
+  <!-- Monitoring Icon -->
+  <shape name="Monitoring" w="50" h="50" aspect="fixed">
+    <background-color=#00BCD4</background-color>
+    <border-color=#0097A7</border-color>
+    <border-width>2</border-width>
+    <foreground-color=#FFFFFF</foreground-color>
+  </shape>
+  
+</mxlibrary>

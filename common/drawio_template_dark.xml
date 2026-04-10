@@ -1,0 +1,182 @@
+<mxfile host="app.diagrams.net" modified="2026-04-10T00:00:00.000Z" agent="Andrew Reischl" version="24.0.0" type="template">
+  <diagram name="Dark Mode Template" id="dark-template">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="800" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <!-- Canvas Background -->
+        <mxCell id="bg1" value="" style="html=1;fillColor=#1E1E1E;strokeColor=none;recursiveResize=0;opacity=30;" vertex="1" parent="1">
+          <mxGeometry x="0" y="0" width="1200" height="800" as="geometry" />
+        </mxCell>
+
+        <!-- Grid Pattern -->
+        <mxCell id="grid1" value="" style="html=1;fillColor=#2D2D2D;strokeColor=#404040;strokeWidth=1;aspect=fixed;verticalLabelPosition=bottom;verticalAlign=top;align=left;spacingLeft=5;spacingTop=5;fontSize=9;fontColor=#B0B0B0;recursiveResize=0;" vertex="1" parent="1">
+          <mxGeometry x="0" y="0" width="1200" height="800" as="geometry" />
+        </mxCell>
+
+        <!-- Legend Box -->
+        <mxCell id="legend1" value="DARK MODE - Database Architecture Template v1.0" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2D2D2D;strokeColor=#404040;fontSize=11;fontStyle=1;fontColor=#FFFFFF;align=center;verticalAlign=middle;spacingLeft=4;spacingRight=4;spacingTop=2;spacingBottom=2;resizable=0;movable=0;deletable=0;" vertex="1" parent="1">
+          <mxGeometry x="10" y="10" width="350" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Server Shape Definition -->
+        <mxCell id="server1" value="Server" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FF8A50;strokeColor=#E64A19;strokeWidth=2;fontSize=12;fontStyle=1;fontColor=#1E1E1E;align=center;verticalAlign=middle;arcSize=10;" vertex="1" parent="1">
+          <mxGeometry x="50" y="60" width="120" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Database Shape Definition -->
+        <mxCell id="db1" value="" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#9C6ADE;strokeColor=#7B4FC9;strokeWidth=2;fontSize=11;fontStyle=1;fontColor=#FFFFFF;align=center;verticalAlign=middle;container=1;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="220" y="60" width="80" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="dblabel1" value="Database" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#FFFFFF;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="220" y="115" width="80" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Cloud Service Shape -->
+        <mxCell id="cloud1" value="Cloud&#xa;Service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#00BCD4;strokeColor=#0097A7;strokeWidth=2;dashed=1;dashPattern=5 3;fontSize=11;fontStyle=1;fontColor=#1E1E1E;align=center;verticalAlign=middle;arcSize=15;" vertex="1" parent="1">
+          <mxGeometry x="350" y="65" width="100" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Load Balancer Shape -->
+        <mxCell id="lb1" value="Load&#xa;Balancer" style="shape=hexagon;whiteSpace=wrap;html=1;fillColor=#4A9FFF;strokeColor=#3D8AE0;strokeWidth=2;perimeter=hexagonPerimeter2;fontSize=10;fontStyle=1;fontColor=#1E1E1E;align=center;verticalAlign=middle;size=10;" vertex="1" parent="1">
+          <mxGeometry x="500" y="60" width="80" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Client/User Shape -->
+        <mxCell id="client1" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#B0B0B0;strokeColor=#909090;strokeWidth=1;fontSize=10;fontColor=#1E1E1E;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="630" y="70" width="50" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="clientlabel1" value="Client" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#B0B0B0;" vertex="1" parent="1">
+          <mxGeometry x="620" y="120" width="70" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Connection Styles Reference -->
+        <mxCell id="conn1_label" value="Connection Styles:" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#FFFFFF;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="200" width="120" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Sync Connection -->
+        <mxCell id="conn_sync" value="" style="endArrow=classic;html=1;strokeColor=#4A9FFF;strokeWidth=2;endFill=1;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="50" y="240" as="sourcePoint" />
+            <mxPoint x="150" y="240" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="conn_sync_label" value="Sync (solid)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#B0B0B0;" vertex="1" parent="1">
+          <mxGeometry x="60" y="248" width="80" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Async Connection -->
+        <mxCell id="conn_async" value="" style="endArrow=classic;html=1;strokeColor=#00BFA5;strokeWidth=2;dashed=1;dashPattern=6 3;endFill=1;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="200" y="240" as="sourcePoint" />
+            <mxPoint x="300" y="240" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="conn_async_label" value="Async (dashed)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#B0B0B0;" vertex="1" parent="1">
+          <mxGeometry x="210" y="248" width="80" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- DR/Failover Connection -->
+        <mxCell id="conn_dr" value="" style="endArrow=classic;html=1;strokeColor=#FF5252;strokeWidth=1.5;dashed=1;dashPattern=3 3;endFill=1;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="350" y="240" as="sourcePoint" />
+            <mxPoint x="450" y="240" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="conn_dr_label" value="DR/Failover" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#B0B0B0;" vertex="1" parent="1">
+          <mxGeometry x="360" y="248" width="80" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Message Queue Connection -->
+        <mxCell id="conn_mq" value="" style="endArrow=classic;html=1;strokeColor=#FFB300;strokeWidth=2;dashed=1;dashPattern=8 4;endFill=1;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="500" y="240" as="sourcePoint" />
+            <mxPoint x="600" y="240" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="conn_mq_label" value="Message Queue" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#B0B0B0;" vertex="1" parent="1">
+          <mxGeometry x="505" y="248" width="90" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Sample Zone/Container -->
+        <mxCell id="zone1" value="NETWORK ZONE" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#404040;strokeWidth=1;dashed=1;dashPattern=8 4;fontSize=10;fontStyle=1;fontColor=#B0B0B0;align=left;verticalAlign=top;spacingLeft=10;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="700" y="60" width="250" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- Color Palette Reference -->
+        <mxCell id="palette1" value="Color Palette (Dark Mode):" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#FFFFFF;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="300" width="150" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Color Swatches -->
+        <mxCell id="swatch_primary" value="Primary" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4A9FFF;strokeColor=#3D8AE0;strokeWidth=1;fontSize=9;fontColor=#1E1E1E;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="50" y="330" width="60" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="swatch_secondary" value="Secondary" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#00BFA5;strokeColor=#00A68C;strokeWidth=1;fontSize=9;fontColor=#1E1E1E;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="120" y="330" width="60" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="swatch_database" value="Database" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9C6ADE;strokeColor=#8A5CC2;strokeWidth=1;fontSize=9;fontColor=#FFFFFF;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="190" y="330" width="60" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="swatch_server" value="Server" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FF8A50;strokeColor=#E07840;strokeWidth=1;fontSize=9;fontColor=#1E1E1E;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="260" y="330" width="60" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="swatch_cloud" value="Cloud" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#00BCD4;strokeColor=#00A5B0;strokeWidth=1;fontSize=9;fontColor=#1E1E1E;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="330" y="330" width="60" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="swatch_warning" value="Warning" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFB300;strokeColor=#E09D00;strokeWidth=1;fontSize=9;fontColor=#1E1E1E;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="400" y="330" width="60" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="swatch_danger" value="Danger" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FF5252;strokeColor=#E04545;strokeWidth=1;fontSize=9;fontColor=#FFFFFF;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="470" y="330" width="60" height="25" as="geometry" />
+        </mxCell>
+
+        <!-- Hex Swatches -->
+        <mxCell id="hex_primary" value="#4A9FFF" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=8;fontColor=#B0B0B0;" vertex="1" parent="1">
+          <mxGeometry x="50" y="355" width="60" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="hex_secondary" value="#00BFA5" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=8;fontColor=#B0B0B0;" vertex="1" parent="1">
+          <mxGeometry x="120" y="355" width="60" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="hex_database" value="#9C6ADE" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=8;fontColor=#B0B0B0;" vertex="1" parent="1">
+          <mxGeometry x="190" y="355" width="60" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="hex_server" value="#FF8A50" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=8;fontColor=#B0B0B0;" vertex="1" parent="1">
+          <mxGeometry x="260" y="355" width="60" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="hex_cloud" value="#00BCD4" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=8;fontColor=#B0B0B0;" vertex="1" parent="1">
+          <mxGeometry x="330" y="355" width="60" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="hex_warning" value="#FFB300" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=8;fontColor=#B0B0B0;" vertex="1" parent="1">
+          <mxGeometry x="400" y="355" width="60" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="hex_danger" value="#FF5252" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=8;fontColor=#B0B0B0;" vertex="1" parent="1">
+          <mxGeometry x="470" y="355" width="60" height="15" as="geometry" />
+        </mxCell>
+
+        <!-- Usage Instructions -->
+        <mxCell id="instr1" value="USAGE INSTRUCTIONS:" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#FFFFFF;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="400" width="200" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="instr2" value="• Use this template as a starting point for new diagrams" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#B0B0B0;" vertex="1" parent="1">
+          <mxGeometry x="50" y="425" width="500" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="instr3" value="• Reference the shapes above for consistent component styling" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#B0B0B0;" vertex="1" parent="1">
+          <mxGeometry x="50" y="443" width="500" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="instr4" value="• Use connection styles to indicate data flow type" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#B0B0B0;" vertex="1" parent="1">
+          <mxGeometry x="50" y="461" width="500" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="instr5" value="• Use zones/containers to group related components" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#B0B0B0;" vertex="1" parent="1">
+          <mxGeometry x="50" y="479" width="500" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="instr6" value="• Export as PNG (2x scale) for best quality in documents" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#B0B0B0;" vertex="1" parent="1">
+          <mxGeometry x="50" y="497" width="500" height="18" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
