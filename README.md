@@ -75,10 +75,6 @@ See `sqlserver/dbatools/readme.md` for details.
 - SQL Server 2016+ (for SQL Server scripts)
 - Appropriate database privileges (DBA role, sysadmin, etc.)
 
-## Contributing
-
-Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
 ## License
 
 MIT License - free to use, just credit the author.
