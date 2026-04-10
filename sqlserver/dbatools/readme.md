@@ -17,6 +17,17 @@ Run scripts in numerical order on each SQL Server instance:
 | `06_login_trigger.sql` | Server trigger for login auditing |
 | `07_ola_backup_template.sql` | Ola Hallengren backup job template |
 | `08_index_maintenance_job.sql` | Index maintenance job |
+| `09_security_audit.sql` | Security audit tables and procedures |
+| `09B_security_jobs.sql` | Security audit job schedule |
+| `10_errorlog_parser.sql` | SQL error log parsing and archiving |
+| `11_alert_framework.sql` | Alert configuration and checks |
+| `11B_mail_setup.sql` | Database Mail configuration |
+| `11C_alert_jobs.sql` | Alert check job schedules |
+| `12_capacity_planning.sql` | Database growth projection |
+| `13_tempdb_contention.sql` | TempDB latch contention monitoring |
+| `14_ag_replica_health.sql` | Availability Group health monitoring |
+| `15_index_recommendations.sql` | Missing/unused index analysis |
+| `16_baseline_comparison.sql` | Performance baseline and comparison |
 
 ## What Gets Collected
 
@@ -25,18 +36,42 @@ Run scripts in numerical order on each SQL Server instance:
 - Performance counters (5-minute intervals)
 - Database size history (hourly)
 - Query performance snapshots (30-minute intervals)
+- TempDB contention (latch waits)
+- AG/replica synchronization health
 
 ### Audit & Security
 - All login attempts (successful and failed)
 - Failed login tracking with IP and hostname
 - Login frequency by user
+- Server role membership changes
+- Permission changes
 
 ### Maintenance Logging
 - Index maintenance operations (rebuild/reorganize)
 - Backup history
 - Integrity check results
+- Error log events
 
-## Views for Quick Analysis
+## Alerts
+
+**IMPORTANT: Database Mail must be configured before alerts will work.**
+
+```bash
+# 1. Run mail setup first
+11B_mail_setup.sql   # Modify SMTP settings
+
+# 2. Test email delivery
+EXEC msdb.dbo.sp_send_dbmail
+    @profile_name = 'DBATools',
+    @recipients = 'your@email.com',
+    @subject = 'Test',
+    @body = 'Test';
+
+# 3. Enable alert jobs
+11C_alert_jobs.sql
+```
+
+## Key Views
 
 ```sql
 -- Current top waits
@@ -51,24 +86,33 @@ SELECT * FROM dba.vFailedLogins24Hours;
 -- Query performance outliers
 SELECT * FROM dba.vQueryPerformanceOutliers;
 
--- Server inventory overview
-SELECT * FROM dba.vServerInventory;
+-- Growth projections
+SELECT * FROM dba.vGrowthProjection;
+
+-- AG health status
+SELECT * FROM dba.vAGReplicaHealth;
+
+-- Recent errors
+SELECT * FROM dba.vRecentErrors;
+
+-- Weekly summary report
+EXEC dba.GenerateWeeklySummary;
 ```
 
-## Maintenance
+## Weekly Maintenance Tasks
 
-### Adjust Retention
 ```sql
-EXEC dba.PurgeOldData @RetentionDays = 30; -- Default
-```
+-- 1. Update baselines quarterly
+EXEC dba.CaptureBaseline @DaysForBaseline = 30;
 
-### Change Collection Intervals
-Edit schedules in SQL Server Agent or modify `05_jobs.sql`.
+-- 2. Compare to baseline weekly
+EXEC dba.CompareToBaseline;
 
-### Add Server to Inventory
-```sql
-INSERT INTO dba.ServerInventory (ServerName, Environment, Notes)
-VALUES ('YourServerName', 'PROD', 'Primary application database');
+-- 3. Capture growth projections
+EXEC dba.CalculateGrowthProjection;
+
+-- 4. Review index recommendations
+SELECT * FROM dba.vIndexRecommendations;
 ```
 
 ## Prerequisites
@@ -76,14 +120,14 @@ VALUES ('YourServerName', 'PROD', 'Primary application database');
 - SQL Server 2016 or later
 - msdb access for Agent job creation
 - Sufficient disk space for logging database
-- Drive D:\SQLBackups\ for backup jobs (or update paths)
+- SMTP server for email alerts
 
 ## Notes
 
-- Change `sa` password or use Windows auth for trigger
 - Test in non-production first
 - Adjust thresholds in procedures to match your environment
 - Consider partitioning tables for large-scale deployments
+- Schedule baseline updates quarterly
 
 ## Credit
 
