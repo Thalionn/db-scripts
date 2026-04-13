@@ -32,6 +32,21 @@ Scripts tested on PostgreSQL 12 through 16.
 |--------|-------------|
 | `generate_documentation.sql` | Generate markdown documentation |
 
+## Quick Health Check
+
+| Script | Description |
+|--------|-------------|
+| `quick_health_check.sql` | Consolidated health check |
+
+## Shell Scripts
+
+| Script | Description |
+|--------|-------------|
+| `scripts/run_health_check.sh` | Run health check and optionally email |
+| `scripts/backup.sh` | Automated backup with retention |
+| `scripts/index_maintenance.sh` | Analyze and optimize indexes |
+| `scripts/setup_cron.sh` | Install cron jobs for automation |
+
 ## Prerequisites
 
 Some scripts require the `pgstattuple` extension:

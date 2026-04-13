@@ -29,6 +29,12 @@ Scripts tested on SQL Server 2016 through 2022.
 |--------|-------------|
 | `job_history.sql` | Recent Agent job execution |
 
+## Quick Health Check
+
+| Script | Description |
+|--------|-------------|
+| `quick_health_check.sql` | Consolidated health check |
+
 ## Prerequisites
 
 Most scripts require:

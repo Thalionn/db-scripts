@@ -47,6 +47,6 @@ SELECT * FROM dba_tablespaces;
 
 ## Quick Test
 
-```bash
-sqlplus / as sysdba @sessions_active.sql
-```
+| Script | Description |
+|--------|-------------|
+| `quick_health_check.sql` | Consolidated health check |

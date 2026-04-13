@@ -30,6 +30,8 @@ Run scripts in numerical order on each SQL Server instance:
 | `16_baseline_comparison.sql` | Performance baseline and comparison |
 | `17_documentation.sql` | Database documentation generator |
 | `18_duplicate_indexes.sql` | Duplicate index detection |
+| `19_login_transfer.sql` | Login transfer scripts |
+| `20_html_report.sql` | HTML health report generator |
 
 ## What Gets Collected
 
