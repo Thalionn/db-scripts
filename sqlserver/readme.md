@@ -35,6 +35,12 @@ Scripts tested on SQL Server 2016 through 2022.
 |--------|-------------|
 | `quick_health_check.sql` | Consolidated health check |
 
+## Configuration
+
+| Script | Description |
+|--------|-------------|
+| `optimal_settings.sql` | Apply community best practices |
+
 ## Prerequisites
 
 Most scripts require:

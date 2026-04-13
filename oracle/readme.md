@@ -50,3 +50,9 @@ SELECT * FROM dba_tablespaces;
 | Script | Description |
 |--------|-------------|
 | `quick_health_check.sql` | Consolidated health check |
+
+## Configuration
+
+| Script | Description |
+|--------|-------------|
+| `optimal_settings.sql` | Apply community best practices |

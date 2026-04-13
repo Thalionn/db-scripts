@@ -58,6 +58,12 @@ SET GLOBAL long_query_time = 2;
 |--------|-------------|
 | `quick_health_check.sql` | Consolidated health check |
 
+## Configuration
+
+| Script | Description |
+|--------|-------------|
+| `optimal_settings.sql` | Apply community best practices |
+
 ```bash
 mysql -e "SELECT * FROM information_schema.processlist;"
 mysql < sessions.sql

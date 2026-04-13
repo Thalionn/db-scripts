@@ -47,6 +47,12 @@ Scripts tested on PostgreSQL 12 through 16.
 | `scripts/index_maintenance.sh` | Analyze and optimize indexes |
 | `scripts/setup_cron.sh` | Install cron jobs for automation |
 
+## Configuration
+
+| Script | Description |
+|--------|-------------|
+| `optimal_settings.sql` | Apply community best practices |
+
 ## Prerequisites
 
 Some scripts require the `pgstattuple` extension:
