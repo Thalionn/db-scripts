@@ -29,6 +29,8 @@ Scripts tested on Oracle 11g through 21c.
 |--------|-------------|
 | `invalid_objects.sql` | Objects requiring recompilation |
 | `fragmentation.sql` | Table chain/fragmentation detection |
+| `duplicate_indexes.sql` | Duplicate index detection |
+| `generate_documentation.sql` | Database documentation generator |
 
 ## Prerequisites
 

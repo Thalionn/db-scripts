@@ -24,6 +24,13 @@ Scripts tested on PostgreSQL 12 through 16.
 | `table_size.sql` | Storage breakdown by table |
 | `bloat_check.sql` | Table bloat detection |
 | `index_usage.sql` | Unused/low-usage indexes |
+| `duplicate_indexes.sql` | Duplicate/redundant index detection |
+
+## Documentation
+
+| Script | Description |
+|--------|-------------|
+| `generate_documentation.sql` | Generate markdown documentation |
 
 ## Prerequisites
 

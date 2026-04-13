@@ -28,6 +28,8 @@ Run scripts in numerical order on each SQL Server instance:
 | `14_ag_replica_health.sql` | Availability Group health monitoring |
 | `15_index_recommendations.sql` | Missing/unused index analysis |
 | `16_baseline_comparison.sql` | Performance baseline and comparison |
+| `17_documentation.sql` | Database documentation generator |
+| `18_duplicate_indexes.sql` | Duplicate index detection |
 
 ## What Gets Collected
 

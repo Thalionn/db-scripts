@@ -28,6 +28,13 @@ Scripts tested on MySQL 5.7 and 8.0.
 |--------|-------------|
 | `disk_usage.sql` | Space consumption by database |
 
+## Documentation
+
+| Script | Description |
+|--------|-------------|
+| `duplicate_indexes.sql` | Duplicate index detection |
+| `generate_documentation.sql` | Database documentation generator |
+
 ## Prerequisites
 
 Performance schema must be enabled:
