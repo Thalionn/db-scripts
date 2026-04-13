@@ -56,3 +56,9 @@ SELECT * FROM dba_tablespaces;
 | Script | Description |
 |--------|-------------|
 | `optimal_settings.sql` | Apply community best practices |
+
+## DBATools
+
+| Folder | Description |
+|--------|-------------|
+| `dbatools/` | Centralized monitoring database |

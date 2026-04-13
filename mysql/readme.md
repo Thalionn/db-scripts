@@ -64,6 +64,12 @@ SET GLOBAL long_query_time = 2;
 |--------|-------------|
 | `optimal_settings.sql` | Apply community best practices |
 
+## DBATools
+
+| Folder | Description |
+|--------|-------------|
+| `dbatools/` | Centralized monitoring database |
+
 ```bash
 mysql -e "SELECT * FROM information_schema.processlist;"
 mysql < sessions.sql
