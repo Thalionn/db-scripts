@@ -1,97 +1,253 @@
 -- =============================================
 -- SQL Server Practice Environment Setup Script
--- Creates simulated users, apps, and scheduled jobs for practice
--- Uses AdventureWorks database as the foundation
+-- Creates a self-contained PracticeDB with simulated
+-- users, data, and scheduled jobs for practice
 -- =============================================
 
 USE master;
 GO
 
--- Enable advanced options if needed
-IF NOT EXISTS (SELECT * FROM sys.configurations WHERE name = 'show advanced options' AND value_in_use = 1)
+IF DB_ID('PracticeDB') IS NOT NULL
 BEGIN
-    EXEC sp_configure 'show advanced options', 1;
-    RECONFIGURE;
+    ALTER DATABASE PracticeDB SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+    DROP DATABASE PracticeDB;
 END
 GO
 
-USE AdventureWorks2019; -- Or your installed version
+CREATE DATABASE PracticeDB;
+GO
+
+ALTER DATABASE PracticeDB SET RECOVERY SIMPLE;
+GO
+
+USE PracticeDB;
 GO
 
 -- =============================================
--- SECTION 1: Create Simulated User Roles
+-- SECTION 0: Create Logins and Database Users
 -- =============================================
 
-PRINT 'Creating simulated user roles...';
+PRINT 'Creating logins and users...';
 
--- 1. Sales Representative (SalesApp)
+IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'SalesAppLogin')
+    CREATE LOGIN [SalesAppLogin] WITH PASSWORD = N'Practice123!';
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'WarehouseAppLogin')
+    CREATE LOGIN [WarehouseAppLogin] WITH PASSWORD = N'Practice123!';
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'AnalyticsAppLogin')
+    CREATE LOGIN [AnalyticsAppLogin] WITH PASSWORD = N'Practice123!';
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'HRAppLogin')
+    CREATE LOGIN [HRAppLogin] WITH PASSWORD = N'Practice123!';
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'CSAppLogin')
+    CREATE LOGIN [CSAppLogin] WITH PASSWORD = N'Practice123!';
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'ExecutiveAppLogin')
+    CREATE LOGIN [ExecutiveAppLogin] WITH PASSWORD = N'Practice123!';
+GO
+
+-- Create schemas
+CREATE SCHEMA Sales AUTHORIZATION dbo;
+GO
+
+CREATE SCHEMA Production AUTHORIZATION dbo;
+GO
+
+CREATE SCHEMA HumanResources AUTHORIZATION dbo;
+GO
+
+-- Create users
 CREATE USER [SalesApp] FOR LOGIN [SalesAppLogin];
-GRANT SELECT, INSERT, UPDATE ON SCHEMA::Sales TO [SalesApp];
-GRANT EXECUTE ON OBJECT::Sales.SalesOrderHeader TO [SalesApp];
-GO
-
--- 2. Warehouse Manager (WarehouseApp)
 CREATE USER [WarehouseApp] FOR LOGIN [WarehouseAppLogin];
-GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA::Production TO [WarehouseApp];
-GRANT SELECT, INSERT, UPDATE ON SCHEMA::Person TO [WarehouseApp];
-GO
-
--- 3. Inventory Analyst (AnalyticsApp)
 CREATE USER [AnalyticsApp] FOR LOGIN [AnalyticsAppLogin];
-GRANT SELECT ON SCHEMA::Sales;
-GRANT SELECT ON SCHEMA::Production;
-GRANT SELECT ON SCHEMA::Person;
-GRANT SELECT ON SCHEMA::Purchasing;
-GO
-
--- 4. HR Specialist (HRApp)
 CREATE USER [HRApp] FOR LOGIN [HRAppLogin];
-GRANT SELECT, INSERT, UPDATE ON SCHEMA::HumanResources TO [HRApp];
-GRANT SELECT ON SCHEMA::Person;
-GO
-
--- 5. Customer Service Rep (CSApp)
 CREATE USER [CSApp] FOR LOGIN [CSAppLogin];
-GRANT SELECT ON SCHEMA::Sales;
-GRANT SELECT, INSERT, UPDATE ON SCHEMA::Person;
-GRANT EXECUTE ON OBJECT::Sales.SalesOrderHeader TO [CSApp];
+CREATE USER [ExecutiveApp] FOR LOGIN [ExecutiveAppLogin];
 GO
 
--- 6. Executive Dashboard (ExecutiveApp)
-CREATE USER [ExecutiveApp] FOR LOGIN [ExecutiveAppLogin];
-GRANT SELECT ON SCHEMA::Sales;
-GRANT SELECT ON SCHEMA::Production;
-GRANT SELECT ON SCHEMA::Person;
-GRANT SELECT ON SCHEMA::Purchasing;
-GRANT EXECUTE ON ALL TABLES IN Sales TO [ExecutiveApp];
+-- Grant permissions
+GRANT SELECT, INSERT, UPDATE ON SCHEMA::Sales TO [SalesApp];
+GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA::Production TO [WarehouseApp];
+GRANT SELECT ON SCHEMA::Sales TO [AnalyticsApp];
+GRANT SELECT ON SCHEMA::Production TO [AnalyticsApp];
+GRANT SELECT, INSERT, UPDATE ON SCHEMA::HumanResources TO [HRApp];
+GRANT SELECT ON SCHEMA::Sales TO [CSApp];
+GRANT SELECT ON SCHEMA::Production TO [CSApp];
+GRANT SELECT ON SCHEMA::Sales TO [ExecutiveApp];
+GRANT SELECT ON SCHEMA::Production TO [ExecutiveApp];
 GO
 
 -- =============================================
--- SECTION 2: Create Simulated Application Jobs
+-- SECTION 1: Create Practice Tables
+-- =============================================
+
+PRINT 'Creating practice tables...';
+
+CREATE TABLE Sales.Products (
+    ProductID INT IDENTITY(1,1) PRIMARY KEY,
+    ProductName NVARCHAR(100) NOT NULL,
+    Category NVARCHAR(50),
+    UnitPrice DECIMAL(10,2),
+    StockQuantity INT DEFAULT 0,
+    ReorderPoint INT DEFAULT 10
+);
+
+CREATE TABLE Sales.Customers (
+    CustomerID INT IDENTITY(1,1) PRIMARY KEY,
+    FirstName NVARCHAR(50),
+    LastName NVARCHAR(50),
+    Email NVARCHAR(100),
+    Phone NVARCHAR(20),
+    City NVARCHAR(50),
+    State NVARCHAR(2),
+    IsActive BIT DEFAULT 1
+);
+
+CREATE TABLE Sales.Orders (
+    OrderID INT IDENTITY(1,1) PRIMARY KEY,
+    CustomerID INT NOT NULL,
+    OrderDate DATETIME DEFAULT GETDATE(),
+    ShipDate DATETIME,
+    Status NVARCHAR(20) DEFAULT 'Pending',
+    TotalAmount DECIMAL(12,2),
+    FOREIGN KEY (CustomerID) REFERENCES Sales.Customers(CustomerID)
+);
+
+CREATE TABLE Sales.OrderDetails (
+    DetailID INT IDENTITY(1,1) PRIMARY KEY,
+    OrderID INT NOT NULL,
+    ProductID INT NOT NULL,
+    Quantity INT,
+    UnitPrice DECIMAL(10,2),
+    FOREIGN KEY (OrderID) REFERENCES Sales.Orders(OrderID),
+    FOREIGN KEY (ProductID) REFERENCES Sales.Products(ProductID)
+);
+
+CREATE TABLE Production.InventoryLog (
+    LogID INT IDENTITY(1,1) PRIMARY KEY,
+    ProductID INT,
+    ChangeType NVARCHAR(20),
+    QuantityChange INT,
+    ChangeDate DATETIME DEFAULT GETDATE(),
+    Notes NVARCHAR(200)
+);
+
+CREATE TABLE HumanResources.Employees (
+    EmployeeID INT IDENTITY(1,1) PRIMARY KEY,
+    FirstName NVARCHAR(50),
+    LastName NVARCHAR(50),
+    Department NVARCHAR(50),
+    JobTitle NVARCHAR(50),
+    HireDate DATE,
+    VacationHours INT DEFAULT 40,
+    SickHours INT DEFAULT 40
+);
+GO
+
+-- =============================================
+-- SECTION 2: Seed Sample Data
+-- =============================================
+
+PRINT 'Seeding sample data...';
+
+INSERT INTO Sales.Products (ProductName, Category, UnitPrice, StockQuantity, ReorderPoint) VALUES
+('Widget A', 'Widgets', 12.99, 150, 20),
+('Widget B', 'Widgets', 24.50, 8, 15),
+('Gadget X', 'Gadgets', 45.00, 200, 30),
+('Gadget Y', 'Gadgets', 32.75, 5, 10),
+('Connector Pro', 'Connectors', 8.50, 500, 100),
+('Adapter Plus', 'Adapters', 15.99, 75, 25),
+('Cable Standard', 'Cables', 5.99, 300, 50),
+('Cable Premium', 'Cables', 9.99, 12, 20),
+('Power Supply', 'Electronics', 89.99, 40, 10),
+('Monitor Stand', 'Accessories', 29.99, 60, 15);
+
+INSERT INTO Sales.Customers (FirstName, LastName, Email, Phone, City, State) VALUES
+('John', 'Smith', 'john.smith@email.com', '555-0101', 'Seattle', 'WA'),
+('Jane', 'Doe', 'jane.doe@email.com', '555-0102', 'Portland', 'OR'),
+('Bob', 'Johnson', 'bob.j@email.com', '555-0103', 'Austin', 'TX'),
+('Alice', 'Williams', 'alice.w@email.com', '555-0104', 'Denver', 'CO'),
+('Charlie', 'Brown', 'charlie.b@email.com', '555-0105', 'Chicago', 'IL'),
+('Diana', 'Prince', 'diana.p@email.com', '555-0106', 'New York', 'NY'),
+('Eve', 'Davis', 'eve.d@email.com', '555-0107', 'San Francisco', 'CA'),
+('Frank', 'Miller', 'frank.m@email.com', '555-0108', 'Boston', 'MA'),
+('Grace', 'Wilson', 'grace.w@email.com', '555-0109', 'Miami', 'FL'),
+('Henry', 'Taylor', 'henry.t@email.com', '555-0110', 'Atlanta', 'GA');
+
+INSERT INTO Sales.Orders (CustomerID, OrderDate, ShipDate, Status, TotalAmount) VALUES
+(1, '2024-01-15', '2024-01-17', 'Shipped', 58.48),
+(2, '2024-01-16', NULL, 'Pending', 134.99),
+(3, '2024-01-17', '2024-01-18', 'Shipped', 45.00),
+(4, '2024-01-18', '2024-01-20', 'Delivered', 179.97),
+(5, '2024-01-19', NULL, 'Processing', 32.75),
+(6, '2024-01-20', NULL, 'Pending', 89.99),
+(7, '2024-01-21', '2024-01-22', 'Shipped', 24.50),
+(1, '2024-02-01', NULL, 'In Process', 67.98),
+(3, '2024-02-03', '2024-02-05', 'Delivered', 155.48),
+(8, '2024-02-05', NULL, 'Approved', 29.99);
+
+INSERT INTO Sales.OrderDetails (OrderID, ProductID, Quantity, UnitPrice) VALUES
+(1, 1, 2, 12.99), (1, 5, 2, 8.50), (1, 3, 1, 45.00),
+(2, 9, 1, 89.99), (2, 2, 1, 24.50), (2, 8, 1, 9.99),
+(3, 3, 1, 45.00),
+(4, 10, 3, 29.99), (4, 6, 2, 15.99), (4, 1, 2, 12.99),
+(5, 4, 1, 32.75),
+(6, 9, 1, 89.99),
+(7, 2, 1, 24.50),
+(8, 1, 2, 12.99), (8, 5, 3, 8.50), (8, 7, 2, 5.99),
+(9, 9, 1, 89.99), (9, 3, 1, 45.00), (9, 8, 1, 9.99), (9, 7, 1, 5.99),
+(10, 10, 1, 29.99);
+
+INSERT INTO HumanResources.Employees (FirstName, LastName, Department, JobTitle, HireDate, VacationHours, SickHours) VALUES
+('Sarah', 'Connor', 'Sales', 'Sales Manager', '2020-03-15', 80, 40),
+('Mike', 'Ross', 'Warehouse', 'Inventory Manager', '2019-07-01', 120, 32),
+('Lisa', 'Park', 'Analytics', 'Data Analyst', '2021-01-10', 60, 48),
+('Tom', 'Hanks', 'HR', 'HR Specialist', '2018-11-20', 160, 56),
+('Amy', 'Chen', 'Sales', 'Account Executive', '2022-05-12', 40, 40),
+('James', 'Bond', 'Warehouse', 'Shipping Clerk', '2023-02-28', 20, 40);
+
+INSERT INTO Production.InventoryLog (ProductID, ChangeType, QuantityChange, Notes) VALUES
+(2, 'RESTOCK', -2, 'Low stock reorder'),
+(4, 'RESTOCK', -5, 'Below reorder point'),
+(8, 'RESTOCK', -8, 'Low stock alert triggered'),
+(1, 'SALE', 2, 'Order #1'),
+(5, 'SALE', 2, 'Order #1'),
+(9, 'SALE', 1, 'Order #2'),
+(2, 'SALE', 1, 'Order #2');
+GO
+
+-- =============================================
+-- SECTION 3: Create Simulated Application Jobs
 -- =============================================
 
 PRINT 'Creating application simulation jobs...';
 
--- Job ID 1: Daily Sales Report Generation (SalesApp)
-DECLARE @salesReportJobId UNIQUEIDENTIFIER;
-EXEC msdb.dbo.sp_add_job 
-    @job_name = N'SalesApp_Daily_Report',
-    @enabled = 1,
-    @description = N'Generates daily sales summary for Sales representative view',
-    @job_id = @salesReportJobId OUTPUT;
+-- Job 1: Daily Sales Report
+IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = 'SalesApp_Daily_Report')
+BEGIN
+    EXEC msdb.dbo.sp_add_job 
+        @job_name = N'SalesApp_Daily_Report',
+        @enabled = 1,
+        @description = N'Generates daily sales summary';
 
-EXEC msdb.dbo.sp_add_jobstep 
-    @job_name = N'SalesApp_Daily_Report',
-    @step_name = N'Generate Sales Summary',
-    @subsystem = N'TSQL',
-    @command = N'USE AdventureWorks2019;
-DECLARE @reportDate DATE = CONVERT(DATE, GETDATE());
-
+    EXEC msdb.dbo.sp_add_jobstep 
+        @job_name = N'SalesApp_Daily_Report',
+        @step_name = N'Generate Sales Summary',
+        @subsystem = N'TSQL',
+        @database_name = N'PracticeDB',
+        @command = N'
 -- Create daily sales summary table
-IF OBJECT_ID('SalesApp_Daily_SalesSummary') IS NOT NULL
-    DROP TABLE SalesApp_Daily_SalesSummary;
+IF OBJECT_ID(''dbo.SalesApp_Daily_SalesSummary'') IS NOT NULL
+    DROP TABLE dbo.SalesApp_Daily_SalesSummary;
 
-CREATE TABLE SalesApp_Daily_SalesSummary (
+CREATE TABLE dbo.SalesApp_Daily_SalesSummary (
     ReportDate DATE PRIMARY KEY,
     TotalSales DECIMAL(18,2),
     OrderCount INT,
@@ -99,53 +255,55 @@ CREATE TABLE SalesApp_Daily_SalesSummary (
     TopProduct NVARCHAR(50)
 );
 
-INSERT INTO SalesApp_Daily_SalesSummary (ReportDate, TotalSales, OrderCount, UniqueCustomers, TopProduct)
+INSERT INTO dbo.SalesApp_Daily_SalesSummary (ReportDate, TotalSales, OrderCount, UniqueCustomers, TopProduct)
 SELECT 
-    CONVERT(DATE, GETDATE()) AS ReportDate,
-    SUM(TotalDue) AS TotalSales,
+    CAST(GETDATE() AS DATE) AS ReportDate,
+    SUM(TotalAmount) AS TotalSales,
     COUNT(*) AS OrderCount,
-    COUNT(DISTINCT SalesOrderNumber) AS UniqueCustomers,
-    TOP 1 ProductName FROM (
-        SELECT p.Name AS ProductName, SUM(so.TotalDue) as Amount
-        FROM Sales.SalesOrderDetail sod
-        JOIN Production.Product p ON sod.ProductID = p.ProductID
-        GROUP BY p.Name
-    ) ranked
-    ORDER BY Amount DESC LIMIT 1;
+    COUNT(DISTINCT CustomerID) AS UniqueCustomers,
+    (SELECT TOP 1 p.ProductName
+     FROM Sales.OrderDetails od
+     JOIN Sales.Products p ON od.ProductID = p.ProductID
+     GROUP BY p.ProductName
+     ORDER BY SUM(od.Quantity * od.UnitPrice) DESC) AS TopProduct
+FROM Sales.Orders
+WHERE CAST(OrderDate AS DATE) = CAST(GETDATE() AS DATE);
 
-SELECT * FROM SalesApp_Daily_SalesSummary WHERE ReportDate = @reportDate;',
-    @on_success_action = 1,
-    @on_fail_action = 2;
+SELECT * FROM dbo.SalesApp_Daily_SalesSummary;';
 
-EXEC msdb.dbo.sp_add_jobserver 
-    @job_name = N'SalesApp_Daily_Report',
-    @server_name = N'(local)';
+    EXEC msdb.dbo.sp_add_jobserver 
+        @job_name = N'SalesApp_Daily_Report',
+        @server_name = @@SERVERNAME;
 
--- Schedule: Daily at 9 AM
-EXEC msdb.dbo.sp_add_schedule 
-    @freq_type = 4, -- Weekly
-    @freq_interval = 1, -- Every day
-    @active_start_time = 540; -- 9:00 AM (HHMM)
+    EXEC msdb.dbo.sp_add_schedule 
+        @schedule_name = N'SalesApp_Daily_Schedule',
+        @freq_type = 4,
+        @freq_interval = 1,
+        @active_start_time = 090000;
 
--- Job ID 2: Inventory Reorder Alert (WarehouseApp)
-DECLARE @inventoryJobId UNIQUEIDENTIFIER;
-EXEC msdb.dbo.sp_add_job 
-    @job_name = N'WarehouseApp_Inventory_Alert',
-    @enabled = 1,
-    @description = N'Monitors inventory levels and alerts on low stock items',
-    @job_id = @inventoryJobId OUTPUT;
+    EXEC msdb.dbo.sp_attach_schedule 
+        @job_name = N'SalesApp_Daily_Report',
+        @schedule_name = N'SalesApp_Daily_Schedule';
+END
 
-EXEC msdb.dbo.sp_add_jobstep 
-    @job_name = N'WarehouseApp_Inventory_Alert',
-    @step_name = N'Check Inventory Levels',
-    @subsystem = N'TSQL',
-    @command = N'USE AdventureWorks2019;
+-- Job 2: Inventory Reorder Alert
+IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = 'WarehouseApp_Inventory_Alert')
+BEGIN
+    EXEC msdb.dbo.sp_add_job 
+        @job_name = N'WarehouseApp_Inventory_Alert',
+        @enabled = 1,
+        @description = N'Monitors inventory levels and alerts on low stock';
 
--- Create inventory alert table
-IF OBJECT_ID('WarehouseApp_LowStockAlert') IS NOT NULL
-    DROP TABLE WarehouseApp_LowStockAlert;
+    EXEC msdb.dbo.sp_add_jobstep 
+        @job_name = N'WarehouseApp_Inventory_Alert',
+        @step_name = N'Check Inventory Levels',
+        @subsystem = N'TSQL',
+        @database_name = N'PracticeDB',
+        @command = N'
+IF OBJECT_ID(''dbo.WarehouseApp_LowStockAlert'') IS NOT NULL
+    DROP TABLE dbo.WarehouseApp_LowStockAlert;
 
-CREATE TABLE WarehouseApp_LowStockAlert (
+CREATE TABLE dbo.WarehouseApp_LowStockAlert (
     AlertID INT IDENTITY(1,1) PRIMARY KEY,
     ProductName NVARCHAR(50),
     CurrentStock INT,
@@ -154,107 +312,110 @@ CREATE TABLE WarehouseApp_LowStockAlert (
     LastChecked DATETIME DEFAULT GETDATE()
 );
 
-INSERT INTO WarehouseApp_LowStockAlert (ProductName, CurrentStock, ReorderPoint, ShortageAmount)
+INSERT INTO dbo.WarehouseApp_LowStockAlert (ProductName, CurrentStock, ReorderPoint, ShortageAmount)
 SELECT 
-    p.Name AS ProductName,
-    inv.Quantity AS CurrentStock,
-    CASE WHEN inv.ReorderLevel IS NOT NULL THEN inv.ReorderLevel ELSE 10 END AS ReorderPoint,
-    CASE WHEN inv.Quantity < COALESCE(inv.ReorderLevel, 10) 
-         THEN 0 - (inv.Quantity - COALESCE(inv.ReorderLevel, 10)) 
-         ELSE 0 END AS ShortageAmount
-FROM Production.ProductInventory inv
-JOIN Production.Product p ON inv.ProductID = p.ProductID
-WHERE inv.Quantity < ISNULL(inv.ReorderPoint, 10)
-ORDER BY ShortageAmount DESC;',
-    @on_success_action = 1,
-    @on_fail_action = 2;
+    p.ProductName,
+    p.StockQuantity AS CurrentStock,
+    p.ReorderPoint,
+    p.ReorderPoint - p.StockQuantity AS ShortageAmount
+FROM Sales.Products p
+WHERE p.StockQuantity < p.ReorderPoint
+ORDER BY ShortageAmount DESC;
 
-EXEC msdb.dbo.sp_add_jobserver 
-    @job_name = N'WarehouseApp_Inventory_Alert',
-    @server_name = N'(local)';
+SELECT * FROM dbo.WarehouseApp_LowStockAlert;';
 
--- Schedule: Every 4 hours
-EXEC msdb.dbo.sp_add_schedule 
-    @freq_type = 4, -- Weekly
-    @freq_interval = 1, -- Every day
-    @freq_subday_type = 4, -- Every 4 hours
-    @freq_subday_interval = 1;
+    EXEC msdb.dbo.sp_add_jobserver 
+        @job_name = N'WarehouseApp_Inventory_Alert',
+        @server_name = @@SERVERNAME;
 
--- Job ID 3: Customer Order Processing (CSApp)
-DECLARE @orderJobId UNIQUEIDENTIFIER;
-EXEC msdb.dbo.sp_add_job 
-    @job_name = N'CSApp_Order_Processing',
-    @enabled = 1,
-    @description = N'Simulates customer order processing and status updates',
-    @job_id = @orderJobId OUTPUT;
+    EXEC msdb.dbo.sp_add_schedule 
+        @schedule_name = N'WarehouseApp_Inventory_Schedule',
+        @freq_type = 4,
+        @freq_interval = 1,
+        @freq_subday_type = 8,
+        @freq_subday_interval = 4,
+        @active_start_time = 000000;
 
-EXEC msdb.dbo.sp_add_jobstep 
-    @job_name = N'CSApp_Order_Processing',
-    @step_name = N'Process Pending Orders',
-    @subsystem = N'TSQL',
-    @command = N'USE AdventureWorks2019;
+    EXEC msdb.dbo.sp_attach_schedule 
+        @job_name = N'WarehouseApp_Inventory_Alert',
+        @schedule_name = N'WarehouseApp_Inventory_Schedule';
+END
 
--- Create order processing log
-IF OBJECT_ID('CSApp_OrderProcessingLog') IS NOT NULL
-    DROP TABLE CSApp_OrderProcessingLog;
+-- Job 3: Customer Order Processing
+IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = 'CSApp_Order_Processing')
+BEGIN
+    EXEC msdb.dbo.sp_add_job 
+        @job_name = N'CSApp_Order_Processing',
+        @enabled = 1,
+        @description = N'Simulates customer order processing';
 
-CREATE TABLE CSApp_OrderProcessingLog (
+    EXEC msdb.dbo.sp_add_jobstep 
+        @job_name = N'CSApp_Order_Processing',
+        @step_name = N'Process Pending Orders',
+        @subsystem = N'TSQL',
+        @database_name = N'PracticeDB',
+        @command = N'
+IF OBJECT_ID(''dbo.CSApp_OrderProcessingLog'') IS NOT NULL
+    DROP TABLE dbo.CSApp_OrderProcessingLog;
+
+CREATE TABLE dbo.CSApp_OrderProcessingLog (
     LogID INT IDENTITY(1,1) PRIMARY KEY,
-    OrderNumber NVARCHAR(25),
+    OrderID INT,
     CustomerName NVARCHAR(100),
     TotalDue DECIMAL(18,2),
     StatusChange NVARCHAR(50),
     ProcessedAt DATETIME DEFAULT GETDATE()
 );
 
--- Simulate processing pending orders (random selection for practice)
-DECLARE @orderCount INT = 5; -- Number of orders to process per run
-DECLARE @processedOrders TABLE (OrderNumber NVARCHAR(25));
+INSERT INTO dbo.CSApp_OrderProcessingLog (OrderID, CustomerName, TotalDue, StatusChange)
+SELECT TOP 5
+    o.OrderID,
+    c.FirstName + '' '' + c.LastName AS CustomerName,
+    o.TotalAmount,
+    CASE WHEN o.Status = ''In Process'' THEN ''Completed'' ELSE ''Status Updated'' END
+FROM Sales.Orders o
+JOIN Sales.Customers c ON o.CustomerID = c.CustomerID
+WHERE o.Status IN (''In Process'', ''Approved'')
+ORDER BY o.OrderDate DESC;
 
-INSERT INTO CSApp_OrderProcessingLog (OrderNumber, CustomerName, TotalDue, StatusChange)
-SELECT TOP (@orderCount) 
-    so.SalesOrderNumber AS OrderNumber,
-    p.FirstName + '' '' + p.LastName AS CustomerName,
-    so.TotalDue,
-    CASE WHEN so.Status = ''In Process'' THEN ''Completed'' ELSE ''Status Updated'' END AS StatusChange
-FROM Sales.SalesOrderHeader so
-JOIN Sales.Customer c ON so.CustomerID = c.CustomerID
-JOIN Person.Person p ON c.PersonID = p.BusinessEntityID
-WHERE so.Status IN (''In Process'', ''Approved'')
-ORDER BY so.ModifiedDate DESC;',
-    @on_success_action = 1,
-    @on_fail_action = 2;
+SELECT * FROM dbo.CSApp_OrderProcessingLog;';
 
-EXEC msdb.dbo.sp_add_jobserver 
-    @job_name = N'CSApp_Order_Processing',
-    @server_name = N'(local)';
+    EXEC msdb.dbo.sp_add_jobserver 
+        @job_name = N'CSApp_Order_Processing',
+        @server_name = @@SERVERNAME;
 
--- Schedule: Every hour during business hours (9 AM - 6 PM)
-EXEC msdb.dbo.sp_add_schedule 
-    @freq_type = 4, -- Weekly
-    @freq_interval = 1, -- Every day
-    @active_start_time = 540, -- 9:00 AM
-    @active_end_time = 1440; -- 6:00 PM
+    EXEC msdb.dbo.sp_add_schedule 
+        @schedule_name = N'CSApp_Order_Schedule',
+        @freq_type = 4,
+        @freq_interval = 1,
+        @freq_subday_type = 8,
+        @freq_subday_interval = 1,
+        @active_start_time = 090000,
+        @active_end_time = 180000;
 
--- Job ID 4: Executive Dashboard Refresh (ExecutiveApp)
-DECLARE @execJobId UNIQUEIDENTIFIER;
-EXEC msdb.dbo.sp_add_job 
-    @job_name = N'ExecutiveApp_Dashboard_Refresh',
-    @enabled = 1,
-    @description = N'Refreshes executive dashboard metrics and KPIs',
-    @job_id = @execJobId OUTPUT;
+    EXEC msdb.dbo.sp_attach_schedule 
+        @job_name = N'CSApp_Order_Processing',
+        @schedule_name = N'CSApp_Order_Schedule';
+END
 
-EXEC msdb.dbo.sp_add_jobstep 
-    @job_name = N'ExecutiveApp_Dashboard_Refresh',
-    @step_name = N'Update Executive Metrics',
-    @subsystem = N'TSQL',
-    @command = N'USE AdventureWorks2019;
+-- Job 4: Executive Dashboard Refresh
+IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = 'ExecutiveApp_Dashboard_Refresh')
+BEGIN
+    EXEC msdb.dbo.sp_add_job 
+        @job_name = N'ExecutiveApp_Dashboard_Refresh',
+        @enabled = 1,
+        @description = N'Refreshes executive dashboard metrics';
 
--- Create executive metrics table
-IF OBJECT_ID('ExecutiveApp_Metrics') IS NOT NULL
-    DROP TABLE ExecutiveApp_Metrics;
+    EXEC msdb.dbo.sp_add_jobstep 
+        @job_name = N'ExecutiveApp_Dashboard_Refresh',
+        @step_name = N'Update Executive Metrics',
+        @subsystem = N'TSQL',
+        @database_name = N'PracticeDB',
+        @command = N'
+IF OBJECT_ID(''dbo.ExecutiveApp_Metrics'') IS NOT NULL
+    DROP TABLE dbo.ExecutiveApp_Metrics;
 
-CREATE TABLE ExecutiveApp_Metrics (
+CREATE TABLE dbo.ExecutiveApp_Metrics (
     MetricID INT IDENTITY(1,1) PRIMARY KEY,
     MetricName NVARCHAR(50),
     CurrentValue DECIMAL(18,2),
@@ -263,356 +424,258 @@ CREATE TABLE ExecutiveApp_Metrics (
     LastUpdated DATETIME DEFAULT GETDATE()
 );
 
--- Insert key metrics
-INSERT INTO ExecutiveApp_Metrics (MetricName, CurrentValue, PreviousValue)
-SELECT 
-    ''TotalRevenue_YTD'' AS MetricName,
-    SUM(TotalDue) AS CurrentValue,
-    SUM(CASE WHEN SalesOrderDate < DATEADD(MONTH, -1, GETDATE()) THEN TotalDue ELSE 0 END) AS PreviousValue
-FROM Sales.SalesOrderHeader
-WHERE SalesOrderDate >= DATEFROMPARTS(YEAR(GETDATE()), MONTH(GETDATE()), 1);
+INSERT INTO dbo.ExecutiveApp_Metrics (MetricName, CurrentValue, PreviousValue)
+VALUES
+    (''TotalRevenue'', (SELECT SUM(TotalAmount) FROM Sales.Orders), 0),
+    (''ActiveCustomers'', (SELECT COUNT(DISTINCT CustomerID) FROM Sales.Orders WHERE OrderDate >= DATEADD(MONTH, -1, GETDATE())), 0),
+    (''AvgOrderValue'', (SELECT AVG(TotalAmount) FROM Sales.Orders), 0),
+    (''TotalProducts'', (SELECT COUNT(*) FROM Sales.Products), 0),
+    (''LowStockItems'', (SELECT COUNT(*) FROM Sales.Products WHERE StockQuantity < ReorderPoint), 0);
 
-INSERT INTO ExecutiveApp_Metrics (MetricName, CurrentValue, PreviousValue)
-SELECT 
-    ''ActiveCustomers'' AS MetricName,
-    COUNT(DISTINCT CustomerID) AS CurrentValue,
-    COUNT(DISTINCT CASE WHEN SalesOrderDate < DATEADD(MONTH, -1, GETDATE()) THEN CustomerID END) AS PreviousValue
-FROM Sales.SalesOrderHeader;
+UPDATE dbo.ExecutiveApp_Metrics
+SET ChangePercent = CASE WHEN PreviousValue > 0 THEN (CurrentValue - PreviousValue) / PreviousValue * 100 ELSE 0 END;
 
-INSERT INTO ExecutiveApp_Metrics (MetricName, CurrentValue, PreviousValue)
-SELECT 
-    ''AvgOrderValue'' AS MetricName,
-    AVG(TotalDue) AS CurrentValue,
-    AVG(CASE WHEN SalesOrderDate < DATEADD(MONTH, -1, GETDATE()) THEN TotalDue END) AS PreviousValue
-FROM Sales.SalesOrderHeader;',
-    @on_success_action = 1,
-    @on_fail_action = 2;
+SELECT * FROM dbo.ExecutiveApp_Metrics;';
 
-EXEC msdb.dbo.sp_add_jobserver 
-    @job_name = N'ExecutiveApp_Dashboard_Refresh',
-    @server_name = N'(local)';
+    EXEC msdb.dbo.sp_add_jobserver 
+        @job_name = N'ExecutiveApp_Dashboard_Refresh',
+        @server_name = @@SERVERNAME;
 
--- Schedule: Every 6 hours
-EXEC msdb.dbo.sp_add_schedule 
-    @freq_type = 4, -- Weekly
-    @freq_interval = 1, -- Every day
-    @freq_subday_type = 4, -- Every 6 hours
-    @freq_subday_interval = 1;
+    EXEC msdb.dbo.sp_add_schedule 
+        @schedule_name = N'ExecutiveApp_Dashboard_Schedule',
+        @freq_type = 4,
+        @freq_interval = 1,
+        @freq_subday_type = 8,
+        @freq_subday_interval = 6,
+        @active_start_time = 000000;
 
--- Job ID 5: HR Employee Activity Monitor (HRApp)
-DECLARE @hrJobId UNIQUEIDENTIFIER;
-EXEC msdb.dbo.sp_add_job 
-    @job_name = N'HRApp_Employee_Activity',
-    @enabled = 1,
-    @description = N'Monitors employee work activity and vacation balances',
-    @job_id = @hrJobId OUTPUT;
+    EXEC msdb.dbo.sp_attach_schedule 
+        @job_name = N'ExecutiveApp_Dashboard_Refresh',
+        @schedule_name = N'ExecutiveApp_Dashboard_Schedule';
+END
 
-EXEC msdb.dbo.sp_add_jobstep 
-    @job_name = N'HRApp_Employee_Activity',
-    @step_name = N'Update Employee Activity',
-    @subsystem = N'TSQL',
-    @command = N'USE AdventureWorks2019;
+-- Job 5: HR Employee Activity Monitor
+IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = 'HRApp_Employee_Activity')
+BEGIN
+    EXEC msdb.dbo.sp_add_job 
+        @job_name = N'HRApp_Employee_Activity',
+        @enabled = 1,
+        @description = N'Monitors employee activity and balances';
 
--- Create employee activity log
-IF OBJECT_ID('HRApp_EmployeeActivity') IS NOT NULL
-    DROP TABLE HRApp_EmployeeActivity;
+    EXEC msdb.dbo.sp_add_jobstep 
+        @job_name = N'HRApp_Employee_Activity',
+        @step_name = N'Update Employee Activity',
+        @subsystem = N'TSQL',
+        @database_name = N'PracticeDB',
+        @command = N'
+IF OBJECT_ID(''dbo.HRApp_EmployeeActivity'') IS NOT NULL
+    DROP TABLE dbo.HRApp_EmployeeActivity;
 
-CREATE TABLE HRApp_EmployeeActivity (
+CREATE TABLE dbo.HRApp_EmployeeActivity (
     ActivityID INT IDENTITY(1,1) PRIMARY KEY,
     EmployeeName NVARCHAR(100),
     Department NVARCHAR(50),
     JobTitle NVARCHAR(50),
-    VacationHoursRemaining DECIMAL(5,2),
-    SickHoursRemaining DECIMAL(5,2),
-    LastLogin DATETIME,
+    VacationHoursRemaining INT,
+    SickHoursRemaining INT,
+    LastActivity DATETIME,
     Status NVARCHAR(30)
 );
 
--- Insert current employee status (sample for practice)
-INSERT INTO HRApp_EmployeeActivity (EmployeeName, Department, JobTitle, VacationHoursRemaining, SickHoursRemaining, LastLogin, Status)
+INSERT INTO dbo.HRApp_EmployeeActivity (EmployeeName, Department, JobTitle, VacationHoursRemaining, SickHoursRemaining, LastActivity, Status)
 SELECT 
-    p.FirstName + '' '' + p.LastName AS EmployeeName,
+    e.FirstName + '' '' + e.LastName AS EmployeeName,
     e.Department,
     e.JobTitle,
-    CASE WHEN v.VacationHours IS NOT NULL THEN v.VacationHours ELSE 0 END AS VacationHoursRemaining,
-    CASE WHEN s.SickLeaveHours IS NOT NULL THEN s.SickLeaveHours ELSE 0 END AS SickHoursRemaining,
-    MAX(so.ModifiedDate) AS LastLogin,
-    CASE 
-        WHEN so.ModifiedDate > DATEADD(HOUR, -24, GETDATE()) THEN ''Active''
-        ELSE ''Inactive''
-    END AS Status
-FROM HumanResources.Employee e
-JOIN Person.Person p ON e.BusinessEntityID = p.BusinessEntityID
-LEFT JOIN HumanResources.EmployeeVacationBalance v ON e.BusinessEntityID = v.BusinessEntityID
-LEFT JOIN HumanResources.EmployeeSickLeave s ON e.BusinessEntityID = s.BusinessEntityID
-LEFT JOIN Sales.SalesOrderHeader so ON e.BusinessEntityID = so.SalesPersonID
-WHERE e.Title NOT IN (''Unemployed'', ''Retired'')
-ORDER BY p.LastName;',
-    @on_success_action = 1,
-    @on_fail_action = 2;
+    e.VacationHours,
+    e.SickHours,
+    GETDATE() AS LastActivity,
+    ''Active'' AS Status
+FROM HumanResources.Employees e;
 
-EXEC msdb.dbo.sp_add_jobserver 
-    @job_name = N'HRApp_Employee_Activity',
-    @server_name = N'(local)';
+SELECT * FROM dbo.HRApp_EmployeeActivity;';
 
--- Schedule: Every 3 hours during business hours
-EXEC msdb.dbo.sp_add_schedule 
-    @freq_type = 4, -- Weekly
-    @freq_interval = 1, -- Every day
-    @active_start_time = 540, -- 9:00 AM
-    @active_end_time = 1320; -- 6:00 PM
-    @freq_subday_type = 4, -- Every 3 hours
-    @freq_subday_interval = 1;
+    EXEC msdb.dbo.sp_add_jobserver 
+        @job_name = N'HRApp_Employee_Activity',
+        @server_name = @@SERVERNAME;
 
--- =============================================
--- SECTION 3: Create Practice Scenario Jobs
--- =============================================
+    EXEC msdb.dbo.sp_add_schedule 
+        @schedule_name = N'HRApp_Employee_Schedule',
+        @freq_type = 4,
+        @freq_interval = 1,
+        @freq_subday_type = 8,
+        @freq_subday_interval = 3,
+        @active_start_time = 090000,
+        @active_end_time = 180000;
 
-PRINT 'Creating practice scenario jobs...';
+    EXEC msdb.dbo.sp_attach_schedule 
+        @job_name = N'HRApp_Employee_Activity',
+        @schedule_name = N'HRApp_Employee_Schedule';
+END
 
--- Job ID 6: Performance Degradation Simulation (for practice)
-DECLARE @perfJobId UNIQUEIDENTIFIER;
-EXEC msdb.dbo.sp_add_job 
-    @job_name = N'Practice_Performance_Stress',
-    @enabled = 0, -- Disabled by default for safety
-    @description = N'Simulates performance stress scenarios for practice (DISABLED)',
-    @job_id = @perfJobId OUTPUT;
-
-EXEC msdb.dbo.sp_add_jobstep 
-    @job_name = N'Practice_Performance_Stress',
-    @step_name = N'Insert Test Data',
-    @subsystem = N'TSQL',
-    @command = N'USE AdventureWorks2019;
-
--- WARNING: Only enable this job for practice purposes!
--- This simulates performance degradation by inserting test data
-
-DECLARE @batchSize INT = 1000; -- Adjust based on your system capacity
-DECLARE @totalRows INT = 50000; -- Total rows to insert (adjust as needed)
-DECLARE @counter INT = 0;
-
-WHILE @counter < @totalRows
+-- Job 6: Practice Lock Monitor
+IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = 'Practice_Lock_Monitor')
 BEGIN
-    INSERT INTO Sales.SalesOrderHeader (RevisionNumber, OrderDate, DueDate, Status, OnlineOrderFlag, PurchaseOrderNumber, AccountNumber, CreditCardID, CurrencyRateId, TotalDue, rowguid, ModifiedDate)
-    SELECT 
-        ABS(CHECKSUM(NEWID())) % 10 + 1 AS RevisionNumber,
-        DATEADD(DAY, ABS(CHECKSUM(NEWID())) % 365, ''2024-01-01'') AS OrderDate,
-        DATEADD(DAY, ABS(CHECKSUM(NEWID())) % 365 + 30, ''2024-01-01'') AS DueDate,
-        ''TS'' AS Status,
-        0 AS OnlineOrderFlag,
-        ''PO-' + CAST(ABS(CHECKSUM(NEWID())) % 999999 AS VARCHAR) + ''' AS PurchaseOrderNumber,
-        ''ACC-' + CAST(ABS(CHECKSUM(NEWID())) % 999999 AS VARCHAR) + ''' AS AccountNumber,
-        NULL AS CreditCardID,
-        NULL AS CurrencyRateId,
-        ABS(CHECKSUM(NEWID())) % 100000.00 AS TotalDue,
-        NEWID() AS rowguid,
-        GETDATE() AS ModifiedDate;
+    EXEC msdb.dbo.sp_add_job 
+        @job_name = N'Practice_Lock_Monitor',
+        @enabled = 1,
+        @description = N'Monitors lock contention and blocking';
 
-    SET @counter = @counter + @batchSize;
-    
-    -- Add small delay to simulate realistic load
-    WAITFOR DELAY ''00:00:01'';
-END;',
-    @on_success_action = 1,
-    @on_fail_action = 2;
+    EXEC msdb.dbo.sp_add_jobstep 
+        @job_name = N'Practice_Lock_Monitor',
+        @step_name = N'Check Locks',
+        @subsystem = N'TSQL',
+        @database_name = N'PracticeDB',
+        @command = N'
+IF OBJECT_ID(''dbo.Practice_LockMonitor'') IS NOT NULL
+    DROP TABLE dbo.Practice_LockMonitor;
 
-EXEC msdb.dbo.sp_add_jobserver 
-    @job_name = N'Practice_Performance_Stress',
-    @server_name = N'(local)';
-
--- Job ID 7: Query Pattern Analysis (for practice)
-DECLARE @queryJobId UNIQUEIDENTIFIER;
-EXEC msdb.dbo.sp_add_job 
-    @job_name = N'Practice_Query_Pattern_Analysis',
-    @enabled = 1,
-    @description = N'Analyzes query patterns and identifies optimization opportunities',
-    @job_id = @queryJobId OUTPUT;
-
-EXEC msdb.dbo.sp_add_jobstep 
-    @job_name = N'Practice_Query_Pattern_Analysis',
-    @step_name = N'Analyze Query Patterns',
-    @subsystem = N'TSQL',
-    @command = N'USE AdventureWorks2019;
-
--- Create query pattern analysis table
-IF OBJECT_ID('Practice_QueryPatterns') IS NOT NULL
-    DROP TABLE Practice_QueryPatterns;
-
-CREATE TABLE Practice_QueryPatterns (
-    PatternID INT IDENTITY(1,1) PRIMARY KEY,
-    QueryPattern NVARCHAR(MAX),
-    ExecutionCount BIGINT,
-    TotalElapsedTime MS,
-    AvgElapsedTime MS,
-    LastExecution DATETIME,
-    Recommendation NVARCHAR(200)
-);
-
--- Analyze common query patterns (simplified for practice)
-INSERT INTO Practice_QueryPatterns (QueryPattern, ExecutionCount, TotalElapsedTime, AvgElapsedTime, LastExecution, Recommendation)
-SELECT 
-    CASE 
-        WHEN COUNT(*) > 100 THEN ''Frequent Query - Consider indexing''
-        ELSE ''Occasional Query''
-    END AS Recommendation,
-    LEFT(STUFF((
-        SELECT ''; '' + SUBSTRING(q.text, (number * 800) + 1, MIN(800, ((END(num) - number * 800 - 1) + 1)))
-        FROM sys.dm_exec_query_stats qs
-        CROSS JOIN (SELECT TOP (20) ROW_NUMBER() OVER (ORDER BY qs.total_elapsed_time DESC) AS num 
-                     FROM sys.dm_exec_query_stats) num
-        WHERE qs.query_hash = qs.query_hash
-        FOR XML PATH('' '')
-    ), 1, 1, '''') AS LEFT(500), -- Truncate for practice
-    COUNT(*) OVER () AS ExecutionCount,
-    SUM(total_elapsed_time) OVER () AS TotalElapsedTime,
-    AVG(total_elapsed_time) OVER () AS AvgElapsedTime,
-    MAX(last_execution_time) OVER () AS LastExecution
-FROM sys.dm_exec_query_stats qs;
-
-SELECT TOP 10 * FROM Practice_QueryPatterns ORDER BY ExecutionCount DESC;',
-    @on_success_action = 1,
-    @on_fail_action = 2;
-
-EXEC msdb.dbo.sp_add_jobserver 
-    @job_name = N'Practice_Query_Pattern_Analysis',
-    @server_name = N'(local)';
-
--- Schedule: Daily at midnight
-EXEC msdb.dbo.sp_add_schedule 
-    @freq_type = 4, -- Weekly
-    @freq_interval = 1, -- Every day
-    @active_start_time = 0; -- Midnight (HHMM)
-
--- =============================================
--- SECTION 4: Create Practice Monitoring Jobs
--- =============================================
-
-PRINT 'Creating practice monitoring jobs...';
-
--- Job ID 8: Lock Contention Monitor (for practice)
-DECLARE @lockJobId UNIQUEIDENTIFIER;
-EXEC msdb.dbo.sp_add_job 
-    @job_name = N'Practice_Lock_Monitor',
-    @enabled = 1,
-    @description = N'Monitors lock contention and blocking for practice',
-    @job_id = @lockJobId OUTPUT;
-
-EXEC msdb.dbo.sp_add_jobstep 
-    @job_name = N'Practice_Lock_Monitor',
-    @step_name = N'Check Locks',
-    @subsystem = N'TSQL',
-    @command = N'USE AdventureWorks2019;
-
--- Create lock monitoring table
-IF OBJECT_ID('Practice_LockMonitor') IS NOT NULL
-    DROP TABLE Practice_LockMonitor;
-
-CREATE TABLE Practice_LockMonitor (
+CREATE TABLE dbo.Practice_LockMonitor (
     MonitorID INT IDENTITY(1,1) PRIMARY KEY,
     CheckTime DATETIME DEFAULT GETDATE(),
     TotalLocks INT,
     BlockedSessions INT,
-    TopBlockedSession SPID,
+    TopBlockingSession INT,
     LockDetails NVARCHAR(MAX)
 );
 
-INSERT INTO Practice_LockMonitor (TotalLocks, BlockedSessions, TopBlockedSession, LockDetails)
+INSERT INTO dbo.Practice_LockMonitor (TotalLocks, BlockedSessions, TopBlockingSession, LockDetails)
 SELECT 
     COUNT(*) AS TotalLocks,
-    SUM(CASE WHEN blocking_session_id IS NOT NULL THEN 1 ELSE 0 END) AS BlockedSessions,
-    MAX(blocking_session_id) AS TopBlockedSession,
-    STUFF((
-        SELECT ''; '' + CAST(request_session_id AS VARCHAR) + '' blocked by '' + CAST(blocking_session_id AS VARCHAR) + '' on '' + OBJECT_NAME(resource_associated_entity_id)
-        FROM sys.dm_tran_locks l
-        CROSS APPLY sys.dm_exec_requests r
-        WHERE l.request_session_id = r.session_id
-        FOR XML PATH('' '')
-    ), 1, 1, '''') AS LockDetails;
+    SUM(CASE WHEN r.blocking_session_id > 0 THEN 1 ELSE 0 END) AS BlockedSessions,
+    MAX(r.blocking_session_id) AS TopBlockingSession,
+    (SELECT STRING_AGG(
+        CAST(r.session_id AS VARCHAR) + '' blocked by '' + CAST(r.blocking_session_id AS VARCHAR),
+        ''; '')
+     FROM sys.dm_exec_requests r
+     WHERE r.blocking_session_id > 0) AS LockDetails
+FROM sys.dm_exec_requests r;
 
-SELECT * FROM Practice_LockMonitor ORDER BY CheckTime DESC LIMIT 5;',
-    @on_success_action = 1,
-    @on_fail_action = 2;
+SELECT TOP 5 * FROM dbo.Practice_LockMonitor ORDER BY CheckTime DESC;';
 
-EXEC msdb.dbo.sp_add_jobserver 
-    @job_name = N'Practice_Lock_Monitor',
-    @server_name = N'(local)';
+    EXEC msdb.dbo.sp_add_jobserver 
+        @job_name = N'Practice_Lock_Monitor',
+        @server_name = @@SERVERNAME;
 
--- Schedule: Every 30 minutes
-EXEC msdb.dbo.sp_add_schedule 
-    @freq_type = 4, -- Weekly
-    @freq_interval = 1, -- Every day
-    @freq_subday_type = 8, -- Every hour
-    @freq_subday_interval = 2; -- Every 30 minutes
+    EXEC msdb.dbo.sp_add_schedule 
+        @schedule_name = N'Practice_Lock_Schedule',
+        @freq_type = 4,
+        @freq_interval = 1,
+        @freq_subday_type = 4,
+        @freq_subday_interval = 30,
+        @active_start_time = 000000;
 
--- Job ID 9: Index Usage Monitor (for practice)
-DECLARE @indexJobId UNIQUEIDENTIFIER;
-EXEC msdb.dbo.sp_add_job 
-    @job_name = N'Practice_Index_Usage',
-    @enabled = 1,
-    @description = N'Monitors index usage statistics for practice',
-    @job_id = @indexJobId OUTPUT;
+    EXEC msdb.dbo.sp_attach_schedule 
+        @job_name = N'Practice_Lock_Monitor',
+        @schedule_name = N'Practice_Lock_Schedule';
+END
 
-EXEC msdb.dbo.sp_add_jobstep 
-    @job_name = N'Practice_Index_Usage',
-    @step_name = N'Update Index Usage',
-    @subsystem = N'TSQL',
-    @command = N'USE AdventureWorks2019;
-
--- Update index usage statistics (if available)
-IF EXISTS (SELECT * FROM sys.dm_db_index_usage_stats WHERE object_id IS NOT NULL)
+-- Job 7: Index Usage Monitor
+IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = 'Practice_Index_Usage')
 BEGIN
-    -- Create index usage summary table
-    IF OBJECT_ID('Practice_IndexUsage') IS NOT NULL
-        DROP TABLE Practice_IndexUsage;
+    EXEC msdb.dbo.sp_add_job 
+        @job_name = N'Practice_Index_Usage',
+        @enabled = 1,
+        @description = N'Monitors index usage statistics';
 
-    CREATE TABLE Practice_IndexUsage (
-        IndexID INT IDENTITY(1,1) PRIMARY KEY,
-        TableName NVARCHAR(256),
-        IndexName NVARCHAR(256),
-        UserSeeks BIGINT,
-        UserScans BIGINT,
-        UserUpdates BIGINT,
-        LastUserSeek DATETIME,
-        LastUserScan DATETIME,
-        LastUserUpdate DATETIME,
-        UsageRatio DECIMAL(10,4)
-    );
+    EXEC msdb.dbo.sp_add_jobstep 
+        @job_name = N'Practice_Index_Usage',
+        @step_name = N'Update Index Usage',
+        @subsystem = N'TSQL',
+        @database_name = N'PracticeDB',
+        @command = N'
+IF OBJECT_ID(''dbo.Practice_IndexUsage'') IS NOT NULL
+    DROP TABLE dbo.Practice_IndexUsage;
 
-    INSERT INTO Practice_IndexUsage (TableName, IndexName, UserSeeks, UserScans, UserUpdates, 
+CREATE TABLE dbo.Practice_IndexUsage (
+    IndexID INT IDENTITY(1,1) PRIMARY KEY,
+    TableName NVARCHAR(256),
+    IndexName NVARCHAR(256),
+    UserSeeks BIGINT,
+    UserScans BIGINT,
+    UserUpdates BIGINT,
+    LastUserSeek DATETIME,
+    LastUserScan DATETIME,
+    LastUserUpdate DATETIME,
+    UsageRatio DECIMAL(10,4)
+);
+
+INSERT INTO dbo.Practice_IndexUsage (TableName, IndexName, UserSeeks, UserScans, UserUpdates, 
                                     LastUserSeek, LastUserScan, LastUserUpdate, UsageRatio)
+SELECT 
+    OBJECT_NAME(s.object_id) AS TableName,
+    i.name AS IndexName,
+    s.user_seeks,
+    s.user_scans,
+    s.user_updates,
+    s.last_user_seek,
+    s.last_user_scan,
+    s.last_user_update,
+    CASE 
+        WHEN s.user_seeks + s.user_scans > 0 
+        THEN CAST(s.user_seeks AS DECIMAL(10,4)) / (s.user_seeks + s.user_scans)
+        ELSE 0 
+    END AS UsageRatio
+FROM sys.dm_db_index_usage_stats s
+JOIN sys.indexes i ON s.object_id = i.object_id AND s.index_id = i.index_id
+WHERE s.database_id = DB_ID()
+  AND OBJECTPROPERTY(s.object_id, ''IsUserTable'') = 1;
+
+SELECT TOP 20 * FROM dbo.Practice_IndexUsage ORDER BY UserSeeks + UserScans DESC;';
+
+    EXEC msdb.dbo.sp_add_jobserver 
+        @job_name = N'Practice_Index_Usage',
+        @server_name = @@SERVERNAME;
+
+    EXEC msdb.dbo.sp_add_schedule 
+        @schedule_name = N'Practice_Index_Schedule',
+        @freq_type = 4,
+        @freq_interval = 1,
+        @freq_subday_type = 8,
+        @freq_subday_interval = 1,
+        @active_start_time = 000000;
+
+    EXEC msdb.dbo.sp_attach_schedule 
+        @job_name = N'Practice_Index_Usage',
+        @schedule_name = N'Practice_Index_Schedule';
+END
+
+-- Job 8: Performance Stress (disabled by default)
+IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = 'Practice_Performance_Stress')
+BEGIN
+    EXEC msdb.dbo.sp_add_job 
+        @job_name = N'Practice_Performance_Stress',
+        @enabled = 0,
+        @description = N'Simulates performance stress (DISABLED)';
+
+    EXEC msdb.dbo.sp_add_jobstep 
+        @job_name = N'Practice_Performance_Stress',
+        @step_name = N'Insert Test Data',
+        @subsystem = N'TSQL',
+        @database_name = N'PracticeDB',
+        @command = N'
+-- WARNING: Only enable for practice purposes!
+DECLARE @batchSize INT = 1000;
+DECLARE @totalRows INT = 50000;
+DECLARE @counter INT = 0;
+
+WHILE @counter < @totalRows
+BEGIN
+    INSERT INTO Sales.Orders (CustomerID, OrderDate, Status, TotalAmount)
     SELECT 
-        OBJECT_NAME(s.object_id) AS TableName,
-        i.name AS IndexName,
-        s.user_seeks,
-        s.user_scans,
-        s.user_updates,
-        MAX(DATEADD(MINUTE, -s.last_user_seek, GETDATE())) AS LastUserSeek,
-        MAX(DATEADD(MINUTE, -s.last_user_scan, GETDATE())) AS LastUserScan,
-        MAX(DATEADD(MINUTE, -s.last_user_update, GETDATE())) AS LastUserUpdate,
-        CASE 
-            WHEN s.user_seeks + s.user_scans > 0 
-            THEN CAST(s.user_seeks AS DECIMAL(10,4)) / (s.user_seeks + s.user_scans)
-            ELSE 0 
-        END AS UsageRatio
-    FROM sys.dm_db_index_usage_stats s
-    JOIN sys.indexes i ON s.object_id = i.object_id AND s.index_id = i.index_id
-    WHERE s.object_id IS NOT NULL;
+        ABS(CHECKSUM(NEWID())) % 10 + 1,
+        DATEADD(DAY, ABS(CHECKSUM(NEWID())) % 365, ''2024-01-01''),
+        ''Pending'',
+        ABS(CHECKSUM(NEWID())) % 100000.00;
 
-    SELECT * FROM Practice_IndexUsage ORDER BY UserSeeks + UserScans DESC LIMIT 20;
-END',
-    @on_success_action = 1,
-    @on_fail_action = 2;
+    SET @counter = @counter + @batchSize;
+    WAITFOR DELAY ''00:00:01'';
+END;';
 
-EXEC msdb.dbo.sp_add_jobserver 
-    @job_name = N'Practice_Index_Usage',
-    @server_name = N'(local)';
-
--- Schedule: Every hour
-EXEC msdb.dbo.sp_add_schedule 
-    @freq_type = 4, -- Weekly
-    @freq_interval = 1, -- Every day
-    @freq_subday_type = 4, -- Every hour
-    @freq_subday_interval = 1;
+    EXEC msdb.dbo.sp_add_jobserver 
+        @job_name = N'Practice_Performance_Stress',
+        @server_name = @@SERVERNAME;
+END
 
 PRINT 'Practice environment setup complete!';
 PRINT '';
@@ -623,10 +686,9 @@ PRINT '  - SalesApp_Daily_Report: Daily sales summaries at 9 AM';
 PRINT '  - WarehouseApp_Inventory_Alert: Inventory checks every 4 hours';
 PRINT '  - CSApp_Order_Processing: Order processing every hour (business hours)';
 PRINT '  - ExecutiveApp_Dashboard_Refresh: Dashboard updates every 6 hours';
-PRINT '  - HRApp_Employee_Activity: Employee activity every 3 hours';
+PRINT '  - HRApp_Employee_Activity: Employee activity every 3 hours (business hours)';
 PRINT '';
 PRINT 'Practice Jobs (Enabled):';
-PRINT '  - Practice_Query_Pattern_Analysis: Query pattern analysis at midnight';
 PRINT '  - Practice_Lock_Monitor: Lock monitoring every 30 minutes';
 PRINT '  - Practice_Index_Usage: Index usage tracking hourly';
 PRINT '';
@@ -635,5 +697,3 @@ PRINT '  - Practice_Performance_Stress: Performance stress testing (enable manua
 PRINT '';
 PRINT 'To enable the performance stress job:';
 PRINT '  EXEC msdb.dbo.sp_update_job @job_name = ''Practice_Performance_Stress'', @enabled = 1;';
-
-GO

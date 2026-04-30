@@ -5,6 +5,8 @@
 
 param(
     [string]$SqlServerInstance = "localhost",
+    [string]$SqlUsername = "sa",
+    [string]$SqlPassword = "",
     [string]$DatabaseName = "PracticeDB",
     [switch]$SkipDownload,
     [switch]$DryRun,
@@ -13,7 +15,6 @@ param(
 
 # Configuration
 $ErrorActionPreference = "Stop"
-$VerbosePreference = "Continue"
 
 # Create output directory if it doesn't exist
 if (-not (Test-Path $OutputPath)) {
@@ -33,6 +34,12 @@ function Write-Header {
     Write-Host ""
 }
 
+function Write-Status {
+    param([string]$Message, [string]$Color = "White")
+    
+    Write-Host "  $Message" -ForegroundColor $Color
+}
+
 function Test-SqlConnection {
     param(
         [string]$ServerInstance,
@@ -42,26 +49,110 @@ function Test-SqlConnection {
     )
     
     try {
-        $connectionString = "Server=$ServerInstance;Database=$DatabaseName;Integrated Security=True;"
+        $connectionString = "Server=$ServerInstance;Database=$DatabaseName;TrustServerCertificate=True;"
         
         if ($Username) {
             $connectionString += "User ID=$Username;Password=$Password;"
+        } else {
+            $connectionString += "Integrated Security=True;"
         }
         
         $connection = New-Object System.Data.SqlClient.SqlConnection($connectionString)
-        $command = New-Object System.Data.SqlClient.SqlCommand("SELECT @@VERSION", $connection)
-        $adapter = New-Object System.Data.SqlClient.SqlDataAdapter($command)
+        $connection.Open()
         
-        $table = New-Object System.Data.DataTable
-        $adapter.Fill($table) | Out-Null
+        $command = $connection.CreateCommand()
+        $command.CommandText = "SELECT @@VERSION"
+        $result = $command.ExecuteScalar()
         
-        Write-Host "Successfully connected to: $ServerInstance" -ForegroundColor Green
+        $connection.Close()
+        
+        $version = $result -replace '.*?(Microsoft SQL Server \d{4}).*', '$1'
+        Write-Host "Successfully connected to: $ServerInstance ($version)" -ForegroundColor Green
         return $true
     }
     catch {
-        Write-Error "Failed to connect to SQL Server: $_" -ForegroundColor Red
+        Write-Host "Failed to connect to SQL Server: $_" -ForegroundColor Red
         return $false
     }
+}
+
+function Execute-SqlCommand {
+    param(
+        [string]$ServerInstance,
+        [string]$DatabaseName = "master",
+        [string]$Username,
+        [string]$Password,
+        [string]$SqlScript
+    )
+    
+    $connectionString = "Server=$ServerInstance;Database=$DatabaseName;TrustServerCertificate=True;"
+    
+    if ($Username) {
+        $connectionString += "User ID=$Username;Password=$Password;"
+    } else {
+        $connectionString += "Integrated Security=True;"
+    }
+    
+    $connection = New-Object System.Data.SqlClient.SqlConnection($connectionString)
+    $connection.Open()
+    
+    try {
+        $command = $connection.CreateCommand()
+        $command.CommandText = $SqlScript
+        $command.CommandTimeout = 300
+        
+        $reader = $command.ExecuteReader()
+        $table = New-Object System.Data.DataTable
+        $table.Load($reader)
+        
+        return $table
+    }
+    finally {
+        $connection.Close()
+    }
+}
+
+function Execute-SqlFile {
+    param(
+        [string]$ServerInstance,
+        [string]$DatabaseName = "master",
+        [string]$Username,
+        [string]$Password,
+        [string]$FilePath
+    )
+    
+    if (-not (Test-Path $FilePath)) {
+        Write-Host "File not found: $FilePath" -ForegroundColor Red
+        return $false
+    }
+    
+    $scriptContent = Get-Content -Path $FilePath -Raw
+    
+    # Split on GO statements for batch execution
+    $batches = $scriptContent -split "^\s*GO\s*$", 0, "Multiline"
+    
+    foreach ($batch in $batches) {
+        $batch = $batch.Trim()
+        
+        if ([string]::IsNullOrWhiteSpace($batch)) {
+            continue
+        }
+        
+        try {
+            Execute-SqlCommand `
+                -ServerInstance $ServerInstance `
+                -DatabaseName $DatabaseName `
+                -Username $Username `
+                -Password $Password `
+                -SqlScript $batch | Out-Null
+        }
+        catch {
+            Write-Host "Error executing batch: $_" -ForegroundColor Yellow
+            # Continue with next batch
+        }
+    }
+    
+    return $true
 }
 
 function Download-Repository {
@@ -75,120 +166,34 @@ function Download-Repository {
     Write-Host "`n--- Downloading from: $Owner/$RepoName ---" -ForegroundColor Cyan
     
     try {
-        # Clone repository
         $clonePath = Join-Path $OutputPath "$RepoName-$Branch"
         
         if (Test-Path $clonePath) {
             Write-Host "Repository already exists, updating..." -ForegroundColor Yellow
-            cd $clonePath
+            $originalPath = Get-Location
+            Set-Location $clonePath
             git pull origin $Branch
-            cd ..
+            Set-Location $originalPath
         } else {
             Write-Host "Cloning repository..." -ForegroundColor Green
-            git clone --branch $Branch https://github.com/$Owner/$RepoName.git $clonePath
+            git clone --depth 1 --branch $Branch "https://github.com/$Owner/$RepoName.git" $clonePath
         }
         
-        # Apply path filter if specified
         if ($PathFilter) {
-            $filteredPath = Join-Path $clonePath "$PathFilter"
+            $filteredPath = Join-Path $clonePath $PathFilter
             if (Test-Path $filteredPath) {
-                Write-Host "Copying filtered content to: $OutputPath" -ForegroundColor Green
-                Copy-Item -Path $filteredPath -Destination $OutputPath -Recurse -Force
+                Write-Host "Filtered content available at: $filteredPath" -ForegroundColor Green
             } else {
-                Write-Warning "Filtered path not found: $PathFilter"
+                Write-Host "Filtered path not found: $PathFilter" -ForegroundColor Yellow
             }
         }
         
         return $true
     }
     catch {
-        Write-Error "Failed to download repository: $_" -ForegroundColor Red
+        Write-Host "Failed to download repository: $_" -ForegroundColor Red
         return $false
     }
-}
-
-function Deploy-SqlScripts {
-    param(
-        [string]$SourcePath,
-        [string]$DestinationDb,
-        [switch]$SkipExisting
-    )
-    
-    if (-not (Test-Path $SourcePath)) {
-        Write-Warning "Source path not found: $SourcePath" -ForegroundColor Yellow
-        return $false
-    }
-    
-    # Get all .sql files
-    $sqlFiles = Get-ChildItem -Path $SourcePath -Filter "*.sql" -Recurse | Sort-Object FullName
-    
-    if ($sqlFiles.Count -eq 0) {
-        Write-Host "No SQL scripts found in: $SourcePath" -ForegroundColor Yellow
-        return $false
-    }
-    
-    Write-Host "`nFound $($sqlFiles.Count) SQL script(s)" -ForegroundColor Green
-    
-    foreach ($file in $sqlFiles) {
-        $relativePath = $file.FullName.Substring($SourcePath.Length + 1).Replace('\', '/')
-        
-        if ($SkipExisting) {
-            # Check if file already exists in database (simplified check)
-            Write-Host "Skipping existing: $($file.Name)" -ForegroundColor Gray
-            continue
-        }
-        
-        Write-Host "`nDeploying: $relativePath" -ForegroundColor Cyan
-        
-        try {
-            # Create backup of current state
-            $backupFile = Join-Path $OutputPath "$($file.BaseName)-$(Get-Date -Format 'yyyyMMdd-HHmmss').bak"
-            
-            if (-not $DryRun) {
-                # Execute the script
-                $connectionString = "Server=$SqlServerInstance;Database=master;Integrated Security=True;"
-                
-                $connection = New-Object System.Data.SqlClient.SqlConnection($connectionString)
-                $connection.Open()
-                
-                try {
-                    $reader = [System.Data.SqlClient.SqlCommand]::CreateReader(
-                        $connection, 
-                        "iis:\$((Get-Content -Path $file.FullName -Raw))"
-                    )
-                    
-                    # Execute in batches for large scripts
-                    $batchSize = 1000
-                    $buffer = @()
-                    
-                    while ($reader.Read()) {
-                        if ($buffer.Count -ge $batchSize) {
-                            Write-SqlBatch $connection $buffer
-                            $buffer = @()
-                        }
-                        $buffer += $reader.GetFieldValue[string]($reader.FieldCount)
-                    }
-                    
-                    if ($buffer.Count -gt 0) {
-                        Write-SqlBatch $connection $buffer
-                    }
-                    
-                    Write-Host "Successfully deployed: $($file.Name)" -ForegroundColor Green
-                    
-                } finally {
-                    $connection.Close()
-                }
-            } else {
-                Write-Host "[DRY RUN] Would deploy: $relativePath" -ForegroundColor Yellow
-            }
-        }
-        catch {
-            Write-Error "Failed to deploy $($file.Name): $_" -ForegroundColor Red
-            continue
-        }
-    }
-    
-    return $true
 }
 
 function Restore-DemoDatabase {
@@ -197,26 +202,24 @@ function Restore-DemoDatabase {
         [string]$TargetDatabase
     )
     
-    if (-not (Test-Path $bacpacFile)) {
-        Write-Warning "BACPAC file not found: $bacpacFile" -ForegroundColor Yellow
+    if (-not (Test-Path $BacpacFile)) {
+        Write-Host "BACPAC file not found: $BacpacFile" -ForegroundColor Yellow
         return $false
     }
     
-    Write-Host "`nRestoring demo database from: $bacpacFile" -ForegroundColor Cyan
+    Write-Host "`nRestoring demo database from: $BacpacFile" -ForegroundColor Cyan
     
     if (-not $DryRun) {
         try {
-            # Use SQL Server BACPAC utility or PowerShell module
-            Import-SqlBacPac -SourceFile $bacpacFile -TargetDatabaseName $TargetDatabase `
-                -ServerInstance $SqlServerInstance -CreateDbIfNotExists:$true
-            
-            Write-Host "Successfully restored: $TargetDatabase" -ForegroundColor Green
+            Write-Host "BACPAC restore requires SqlPackage.exe or DBATools module" -ForegroundColor Yellow
+            Write-Host "Manual restore command:" -ForegroundColor Gray
+            Write-Host "  SqlPackage /Action:Import /SourceFile:`"$BacpacFile`" /TargetServerName:`"$SqlServerInstance`" /TargetDatabaseName:`"$TargetDatabase`" /TargetTrustServerCertificate:True" -ForegroundColor Gray
         }
         catch {
-            Write-Error "Failed to restore database: $_" -ForegroundColor Red
+            Write-Host "Failed to restore database: $_" -ForegroundColor Red
         }
     } else {
-        Write-Host "[DRY RUN] Would restore: $bacpacFile to $TargetDatabase" -ForegroundColor Yellow
+        Write-Host "[DRY RUN] Would restore: $BacpacFile to $TargetDatabase" -ForegroundColor Yellow
     }
     
     return $true
@@ -228,9 +231,20 @@ function Restore-DemoDatabase {
 
 Write-Header "SQL Server Practice Environment Auto-Deploy"
 
+# Build connection params
+$connParams = @{
+    ServerInstance = $SqlServerInstance
+    DatabaseName = "master"
+}
+
+if ($SqlUsername) {
+    $connParams["Username"] = $SqlUsername
+    $connParams["Password"] = $SqlPassword
+}
+
 # Check SQL Server connection
-if (-not (Test-SqlConnection -ServerInstance $SqlServerInstance)) {
-    Write-Error "Cannot connect to SQL Server instance: $SqlServerInstance" -ForegroundColor Red
+if (-not (Test-SqlConnection @connParams)) {
+    Write-Host "Cannot connect to SQL Server instance: $SqlServerInstance" -ForegroundColor Red
     exit 1
 }
 
@@ -238,292 +252,188 @@ if (-not (Test-SqlConnection -ServerInstance $SqlServerInstance)) {
 if (-not $SkipDownload) {
     
     # 1. Download user's db-scripts repository
-    Write-Host "`n[1/4] Downloading your practice scripts..." -ForegroundColor Cyan
+    Write-Host "`n[1/4] Downloading practice scripts..." -ForegroundColor Cyan
     
     try {
-        git clone --depth 1 https://github.com/Thalionn/db-scripts.git "$OutputPath\db-scripts"
-        Write-Host "Successfully downloaded: db-scripts" -ForegroundColor Green
+        $dbScriptsPath = Join-Path $OutputPath "db-scripts"
+        if (-not (Test-Path $dbScriptsPath)) {
+            git clone --depth 1 "https://github.com/Thalionn/db-scripts.git" $dbScriptsPath
+            Write-Host "Successfully downloaded: db-scripts" -ForegroundColor Green
+        } else {
+            Write-Host "db-scripts already downloaded, skipping..." -ForegroundColor Gray
+        }
     }
     catch {
-        Write-Error "Failed to download db-scripts: $_" -ForegroundColor Red
+        Write-Host "Failed to download db-scripts: $_" -ForegroundColor Red
     }
     
-    # 2. Download Brent Ozar's First Aid Kit
-    Write-Host "`n[2/4] Downloading Brent Ozar's First Aid Kit..." -ForegroundColor Cyan
+    # 2. Download Brent Ozar's First Responder Kit
+    Write-Host "`n[2/4] Downloading First Responder Kit..." -ForegroundColor Cyan
     
     try {
-        git clone --depth 1 https://github.com/brentozar/SqlFirstAidKit.git "$OutputPath\SqlFirstAidKit"
-        Write-Host "Successfully downloaded: SqlFirstAidKit" -ForegroundColor Green
+        Download-Repository -Owner "BrentOzarULTD" -RepoName "SQL-Server-First-Responder-Kit" -Branch "main"
+        Write-Host "Successfully downloaded: First Responder Kit" -ForegroundColor Green
     }
     catch {
-        Write-Error "Failed to download SqlFirstAidKit: $_" -ForegroundColor Red
+        Write-Host "Failed to download First Responder Kit: $_" -ForegroundColor Red
     }
     
-    # 3. Download Ola Hallengren's Backup Scripts
+    # 3. Download Ola Hallengren's Maintenance Solution
     Write-Host "`n[3/4] Downloading Ola Hallengren's Maintenance Solution..." -ForegroundColor Cyan
     
     try {
-        git clone --depth 1 https://github.com/OlaHallengren/MaintenanceSolution.git "$OutputPath\MaintenanceSolution"
-        Write-Host "Successfully downloaded: MaintenanceSolution" -ForegroundColor Green
+        Download-Repository -Owner "olahallengren" -RepoName "sql-server-maintenance-solution" -Branch "master"
+        Write-Host "Successfully downloaded: Maintenance Solution" -ForegroundColor Green
     }
     catch {
-        Write-Error "Failed to download MaintenanceSolution: $_" -ForegroundColor Red
+        Write-Host "Failed to download Maintenance Solution: $_" -ForegroundColor Red
     }
     
     # 4. Download WideWorldImporters demo database
     Write-Host "`n[4/4] Downloading WideWorldImporters demo..." -ForegroundColor Cyan
     
     try {
-        $wwiUrl = "https://github.com/OneIdentity/WideWorldImporters/archive/refs/heads/master.zip"
-        $tempZip = Join-Path $OutputPath "WideWorldImporters.zip"
-        
-        Invoke-WebRequest -Uri $wwiUrl -OutFile $tempZip
-        
-        # Extract the zip file
-        Expand-Archive -Path $tempZip -DestinationPath "$OutputPath\WideWorldImporters-master" -Force
-        
-        # Convert to BACPAC format (or use existing if available)
-        $bacpacSource = Join-Path "$OutputPath\WideWorldImporters-master" "WwiDb.bacpac"
-        
-        if (-not (Test-Path $bacpacSource)) {
-            Write-Warning "BACPAC file not found in WideWorldImporters. Using SQL script instead." -ForegroundColor Yellow
+        $wwiPath = Join-Path $OutputPath "WideWorldImporters"
+        if (-not (Test-Path $wwiPath)) {
+            $wwiUrl = "https://github.com/OneIdentity/WideWorldImporters/archive/refs/heads/master.zip"
+            $tempZip = Join-Path $OutputPath "WideWorldImporters.zip"
             
-            # Use the main deployment script
-            $deployScript = Join-Path "$OutputPath\WideWorldImporters-master" "Deploy-WideWorldImporters.sql"
+            Write-Host "Downloading WideWorldImporters..." -ForegroundColor Green
+            Invoke-WebRequest -Uri $wwiUrl -OutFile $tempZip
             
-            if (Test-Path $deployScript) {
-                Write-Host "Found deployment script: Deploy-WideWorldImporters.sql" -ForegroundColor Green
-                
-                # Execute the deployment script
-                $connectionString = "Server=$SqlServerInstance;Database=master;Integrated Security=True;"
-                
-                $connection = New-Object System.Data.SqlClient.SqlConnection($connectionString)
-                $command = New-Object System.Data.SqlClient.SqlCommand("$deployScript", $connection)
-                $adapter = New-Object System.Data.SqlClient.SqlDataAdapter($command)
-                $table = New-Object System.Data.DataTable
-                
-                try {
-                    $adapter.Fill($table) | Out-Null
-                    Write-Host "Successfully deployed WideWorldImporters database" -ForegroundColor Green
-                }
-                catch {
-                    Write-Error "Failed to deploy WideWorldImporters: $_" -ForegroundColor Red
-                }
+            Write-Host "Extracting..." -ForegroundColor Green
+            Expand-Archive -Path $tempZip -DestinationPath $wwiPath -Force
+            
+            # Clean up zip
+            Remove-Item $tempZip -Force
+            
+            # Look for BACPAC or SQL deployment script
+            $bacpacFile = Get-ChildItem -Path $wwiPath -Recurse -Filter "*.bacpac" | Select-Object -First 1
+            $deployScript = Get-ChildItem -Path $wwiPath -Recurse -Filter "Deploy-WideWorldImporters.sql" | Select-Object -First 1
+            
+            if ($bacpacFile) {
+                Restore-DemoDatabase -BacpacFile $bacpacFile.FullName -TargetDatabase "WideWorldImporters"
+            } elseif ($deployScript) {
+                Write-Host "Found deployment script: $($deployScript.FullName)" -ForegroundColor Green
+                Write-Host "Deploy manually:" -ForegroundColor Gray
+                Write-Host "  sqlcmd -S $SqlServerInstance -i `"$($deployScript.FullName)`"" -ForegroundColor Gray
+            } else {
+                Write-Host "No BACPAC or deployment script found in WideWorldImporters" -ForegroundColor Yellow
             }
         } else {
-            # Restore the BACPAC file
-            Restore-DemoDatabase -BacpacFile $bacpacSource -TargetDatabase "WideWorldImporters"
+            Write-Host "WideWorldImporters already downloaded, skipping..." -ForegroundColor Gray
         }
-        
     }
     catch {
-        Write-Error "Failed to download WideWorldImporters: $_" -ForegroundColor Red
+        Write-Host "Failed to download WideWorldImporters: $_" -ForegroundColor Red
     }
 }
 
 # =============================================
-# DEPLOY YOUR PRACTICE SCRIPTS
+# DEPLOY PRACTICE ENVIRONMENT SETUP
 # =============================================
 
-Write-Host "`n[5/6] Deploying your practice environment scripts..." -ForegroundColor Cyan
+Write-Host "`n[5/7] Deploying practice environment setup..." -ForegroundColor Cyan
 
-$yourScriptsPath = Join-Path $OutputPath "db-scripts\sqlserver"
-if (Test-Path $yourScriptsPath) {
-    Deploy-SqlScripts `
-        -SourcePath $yourScriptsPath `
-        -DestinationDb $DatabaseName `
-        -SkipExisting:$false
+# Find the practice environment setup script
+$scriptDir = Split-Path -Parent $PSCommandPath
+$practiceSetup = Join-Path $scriptDir "practice_environment_setup.sql"
+
+if (-not (Test-Path $practiceSetup)) {
+    $practiceSetup = Join-Path $OutputPath "db-scripts\sqlserver\practice_environment_setup.sql"
+}
+
+if (Test-Path $practiceSetup) {
+    Write-Host "Found practice setup script: $practiceSetup" -ForegroundColor Green
     
-    # Also deploy practice environment setup if it exists
-    $practiceSetup = Join-Path $yourScriptsPath "practice_environment_setup.sql"
-    if (Test-Path $practiceSetup) {
-        Write-Host "`nDeploying practice environment setup..." -ForegroundColor Cyan
+    try {
+        Execute-SqlFile `
+            -ServerInstance $SqlServerInstance `
+            -DatabaseName "master" `
+            -Username $connParams["Username"] `
+            -Password $connParams["Password"] `
+            -FilePath $practiceSetup
+        
+        Write-Host "Successfully deployed practice environment" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "Failed to deploy practice environment: $_" -ForegroundColor Red
+    }
+} else {
+    Write-Host "practice_environment_setup.sql not found" -ForegroundColor Yellow
+}
+
+# =============================================
+# DEPLOY YOUR SQL SCRIPTS
+# =============================================
+
+Write-Host "`n[6/7] Deploying SQL scripts..." -ForegroundColor Cyan
+
+$sqlScriptsPath = Join-Path $OutputPath "db-scripts\sqlserver"
+if (Test-Path $sqlScriptsPath) {
+    $sqlFiles = Get-ChildItem -Path $sqlScriptsPath -Filter "*.sql" -Recurse | 
+        Where-Object { $_.Name -ne "practice_environment_setup.sql" } |
+        Sort-Object Name
+    
+    Write-Host "Found $($sqlFiles.Count) SQL scripts to deploy" -ForegroundColor Green
+    
+    foreach ($file in $sqlFiles) {
+        $relativePath = $file.FullName.Substring($sqlScriptsPath.Length + 1)
+        Write-Host "Deploying: $relativePath" -ForegroundColor Cyan
         
         try {
-            $connectionString = "Server=$SqlServerInstance;Database=master;Integrated Security=True;"
+            Execute-SqlFile `
+                -ServerInstance $SqlServerInstance `
+                -DatabaseName "master" `
+                -Username $connParams["Username"] `
+                -Password $connParams["Password"] `
+                -FilePath $file.FullName | Out-Null
             
-            $connection = New-Object System.Data.SqlClient.SqlConnection($connectionString)
-            $command = New-Object System.Data.SqlClient.SqlCommand((Get-Content -Path $practiceSetup -Raw), $connection)
-            $adapter = New-Object System.Data.SqlClient.SqlDataAdapter($command)
-            $table = New-Object System.Data.DataTable
-            
-            $connection.Open()
-            $adapter.Fill($table) | Out-Null
-            $connection.Close()
-            
-            Write-Host "Successfully deployed practice environment" -ForegroundColor Green
+            Write-Host "  Deployed: $($file.Name)" -ForegroundColor Green
         }
         catch {
-            Write-Error "Failed to deploy practice environment: $_" -ForegroundColor Red
+            Write-Host "  Failed: $($file.Name) - $_" -ForegroundColor Red
         }
     }
 }
 
 # =============================================
-# DEPLOY FIRST AID KIT (SELECT SCRIPTS ONLY)
+# DEPLOY FIRST RESPONDER KIT (OPTIONAL)
 # =============================================
 
-Write-Host "`n[6/7] Deploying First Aid Kit diagnostic scripts..." -ForegroundColor Cyan
+Write-Host "`n[7/7] Deploying First Responder Kit procedures..." -ForegroundColor Cyan
 
-$firstAidPath = Join-Path $OutputPath "SqlFirstAidKit"
-if (Test-Path $firstAidPath) {
-    # Copy useful scripts to your database for easy access
-    $scriptsToCopy = @(
-        "DiagnosticScripts\01_Diagnostic_Queries.sql",
-        "DiagnosticScripts\02_Performance_Monitoring.sql",
-        "DiagnosticScripts\03_Security_Auditing.sql"
+$frkPath = Join-Path $OutputPath "SQL-Server-First-Responder-Kit-main"
+if (Test-Path $frkPath) {
+    $frkScripts = @(
+        "sp_Blitz.sql",
+        "sp_BlitzFirst.sql",
+        "sp_BlitzIndex.sql",
+        "sp_BlitzCache.sql"
     )
     
-    foreach ($script in $scriptsToCopy) {
-        $sourceFile = Join-Path $firstAidPath "$script"
+    foreach ($script in $frkScripts) {
+        $sourceFile = Join-Path $frkPath $script
         if (Test-Path $sourceFile) {
-            Write-Host "`nCopying: $script" -ForegroundColor Cyan
+            Write-Host "Deploying: $script" -ForegroundColor Cyan
             
             try {
-                # Read and execute the script
-                $content = Get-Content -Path $sourceFile -Raw
+                Execute-SqlFile `
+                    -ServerInstance $SqlServerInstance `
+                    -DatabaseName "master" `
+                    -Username $connParams["Username"] `
+                    -Password $connParams["Password"] `
+                    -FilePath $sourceFile | Out-Null
                 
-                $connectionString = "Server=$SqlServerInstance;Database=master;Integrated Security=True;"
-                
-                $connection = New-Object System.Data.SqlClient.SqlConnection($connectionString)
-                $command = New-Object System.Data.SqlClient.SqlCommand($content, $connection)
-                $adapter = New-Object System.Data.SqlClient.SqlDataAdapter($command)
-                $table = New-Object System.Data.DataTable
-                
-                $connection.Open()
-                $adapter.Fill($table) | Out-Null
-                $connection.Close()
-                
-                Write-Host "Successfully deployed: $script" -ForegroundColor Green
+                Write-Host "  Deployed: $script" -ForegroundColor Green
             }
             catch {
-                Write-Error "Failed to deploy $script: $_" -ForegroundColor Red
+                Write-Host "  Failed: $script - $_" -ForegroundColor Red
             }
         }
     }
-}
-
-# =============================================
-# DEPLOY MAINTENANCE SOLUTION (CONFIGURE FOR PRACTICE)
-# =============================================
-
-Write-Host "`n[7/8] Configuring Maintenance Solution for practice..." -ForegroundColor Cyan
-
-$maintenancePath = Join-Path $OutputPath "MaintenanceSolution"
-if (Test-Path $maintenancePath) {
-    # Create a simplified maintenance configuration for practice
-    
-    $configContent = @"
--- =============================================
--- Practice Environment Maintenance Configuration
--- Simplified version of Ola Hallengren's Maintenance Solution
--- =============================================
-
-USE master;
-GO
-
--- Create maintenance database
-IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'PracticeMaintenance')
-BEGIN
-    CREATE DATABASE [PracticeMaintenance]
-    ON (NAME = PracticeMaintenance_Data, FILENAME = N'PracticeMaintenance.mdf')
-    LOG ON (NAME = PracticeMaintenance_Log, FILENAME = N'PracticeMaintenance.ldf');
-END
-GO
-
--- Create maintenance tables
-USE PracticeMaintenance;
-GO
-
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[MaintenanceHistory]') AND type in (N'U'))
-BEGIN
-    CREATE TABLE [dbo].[MaintenanceHistory](
-        [MaintenanceDate] [datetime2](7) NOT NULL,
-        [DatabaseName] [sysname] NOT NULL,
-        [OperationType] [nvarchar](50) NOT NULL,
-        [Status] [nvarchar](20) NOT NULL,
-        [DurationSeconds] [int],
-        [ErrorMessage] [nvarchar](max),
-        CONSTRAINT [PK_MaintenanceHistory] PRIMARY KEY CLUSTERED ([MaintenanceDate] ASC)
-    );
-END
-GO
-
--- Create maintenance jobs (simplified for practice)
-USE master;
-GO
-
-IF NOT EXISTS (SELECT * FROM msdb.dbo.sysjobs WHERE name = 'Practice_Backup_Job')
-BEGIN
-    EXEC msdb.dbo.sp_add_job 
-        @job_name = N'Practice_Backup_Job',
-        @enabled = 1,
-        @description = N'Practice backup job using Ola Hallengren''s solution';
-
-    EXEC msdb.dbo.sp_add_jobstep 
-        @job_name = N'Practice_Backup_Job',
-        @step_name = N'Run Maintenance Plan',
-        @subsystem = N'TSQL',
-        @command = N'EXEC [PracticeMaintenance].[dbo].[xp_MaintenanceSolution]';
-
-    EXEC msdb.dbo.sp_add_jobserver 
-        @job_name = N'Practice_Backup_Job',
-        @server_name = N'(local)';
-END
-GO
-
--- =============================================
--- Practice Environment Ready!
--- =============================================
-"@
-
-    try {
-        $connectionString = "Server=$SqlServerInstance;Database=master;Integrated Security=True;"
-        
-        $connection = New-Object System.Data.SqlClient.SqlConnection($connectionString)
-        $command = New-Object System.Data.SqlClient.SqlCommand($configContent, $connection)
-        $adapter = New-Object System.Data.SqlClient.SqlDataAdapter($command)
-        $table = New-Object System.Data.DataTable
-        
-        $connection.Open()
-        $adapter.Fill($table) | Out-Null
-        $connection.Close()
-        
-        Write-Host "Successfully configured Maintenance Solution for practice" -ForegroundColor Green
-    }
-    catch {
-        Write-Error "Failed to configure maintenance solution: $_" -ForegroundColor Red
-    }
-}
-
-# =============================================
-# INSTALL DBATools MODULE (OPTIONAL)
-# =============================================
-
-if (-not $SkipDownload) {
-    Write-Host "`n[8/10] Installing DBATools PowerShell module..." -ForegroundColor Cyan
-    
-    try {
-        # Check if DBATools is already installed
-        if (-not (Get-Module -ListAvailable -Name Dbatools)) {
-            Write-Host "DBATools not found, installing..." -ForegroundColor Yellow
-            
-            # Install DBATools from PowerShellGallery
-            Install-Module -Name Dbatools -Force -Scope CurrentUser -AllowClobber
-            
-            Write-Host "Successfully installed DBATools module" -ForegroundColor Green
-        } else {
-            Write-Host "DBATools already installed, skipping..." -ForegroundColor Gray
-        }
-        
-        # Import the module for use in this session
-        Import-Module Dbatools -ErrorAction SilentlyContinue
-        
-    }
-    catch {
-        Write-Warning "Failed to install DBATools: $_" -ForegroundColor Yellow
-        Write-Host "You can still use the script without DBATools, but some features may be limited." -ForegroundColor Gray
-    }
+} else {
+    Write-Host "First Responder Kit not found (use -SkipDownload:false to download)" -ForegroundColor Yellow
 }
 
 # =============================================
@@ -532,50 +442,60 @@ if (-not $SkipDownload) {
 
 Write-Header "Deployment Complete!"
 
-if (-not $DryRun) {
-    Write-Host "`nPractice Environment Summary:" -ForegroundColor Green
-    Write-Host "========================================" -ForegroundColor Cyan
-    
-    # List deployed scripts
-    Write-Host "`nDeployed Scripts:" -ForegroundColor Yellow
-    Get-ChildItem -Path "$OutputPath\db-scripts\sqlserver" -Filter "*.sql" -Recurse | 
-        ForEach-Object {
-            $relative = $_.FullName.Substring($OutputPath.Length + 1).Replace('\', '/')
-            Write-Host "  ✓ $relative" -ForegroundColor Green
-        }
-    
-    Write-Host "`nAvailable Tools:" -ForegroundColor Yellow
-    
-    if (Get-Module -ListAvailable -Name Dbatools) {
-        Write-Host "  ✓ DBATools PowerShell module installed" -ForegroundColor Green
-        Write-Host "    Use: Connect-DbaSql, Get-DbaDb, Invoke-DbaQuery, etc." -ForegroundColor Gray
-    } else {
-        Write-Host "  ⚠ DBATools not installed (optional)" -ForegroundColor Yellow
-        Write-Host "    Install with: Install-Module -Name Dbatools -Scope CurrentUser" -ForegroundColor Gray
-    }
-    
-    Write-Host "  ✓ First Aid Kit diagnostic scripts" -ForegroundColor Green
-    Write-Host "  ✓ Maintenance Solution configuration" -ForegroundColor Green
-    
-    if (Test-Path "$OutputPath\WideWorldImporters-master") {
-        Write-Host "  ✓ WideWorldImporters demo database" -ForegroundColor Green
-    }
-    
-    Write-Host "`nPractice Environment Features:" -ForegroundColor Yellow
-    Write-Host "  • Simulated user roles and applications" -ForegroundColor White
-    Write-Host "  • Scheduled jobs for various business scenarios" -ForegroundColor White
-    Write-Host "  • Performance monitoring and diagnostics" -ForegroundColor White
-    Write-Host "  • Lock contention analysis tools" -ForegroundColor White
-    Write-Host "  • Index usage tracking" -ForegroundColor White
-    
-    Write-Host "`nNext Steps:" -ForegroundColor Yellow
-    Write-Host "1. Connect to SQL Server and explore the practice environment" -ForegroundColor White
-    Write-Host "2. Review deployed scripts in: $OutputPath\db-scripts\sqlserver" -ForegroundColor White
-    Write-Host "3. Use First Aid Kit scripts for diagnostic practice" -ForegroundColor White
-    Write-Host "4. Configure Maintenance Solution backup jobs as needed" -ForegroundColor White
-    
+Write-Host "Practice Environment Summary:" -ForegroundColor Green
+Write-Host "========================================" -ForegroundColor Cyan
+
+# Check for PracticeDB
+$dbCheck = Execute-SqlCommand @connParams -SqlScript "SELECT name, create_date FROM sys.databases WHERE name = 'PracticeDB'"
+if ($dbCheck -and $dbCheck.Rows.Count -gt 0) {
+    Write-Host "  [OK] PracticeDB database created" -ForegroundColor Green
 } else {
-    Write-Host "`n[DRY RUN] No changes were made to the SQL Server instance." -ForegroundColor Yellow
+    Write-Host "  [--] PracticeDB not found" -ForegroundColor Yellow
 }
 
-Write-Host "`nDownloaded files are in: $OutputPath" -ForegroundColor Cyan
+# List deployed scripts
+Write-Host "`nDeployed Scripts:" -ForegroundColor Yellow
+if (Test-Path $sqlScriptsPath) {
+    Get-ChildItem -Path $sqlScriptsPath -Filter "*.sql" -Recurse | 
+        ForEach-Object {
+            $relative = $_.FullName.Substring((Split-Path -Parent $sqlScriptsPath).Length + 1)
+            Write-Host "  [OK] $relative" -ForegroundColor Green
+        }
+}
+
+Write-Host "`nAvailable Tools:" -ForegroundColor Yellow
+
+# Check for DBATools module
+if (Get-Module -ListAvailable -Name dbatools -ErrorAction SilentlyContinue) {
+    Write-Host "  [OK] DBATools PowerShell module installed" -ForegroundColor Green
+    Write-Host "       Use: Connect-DbaInstance, Get-DbaDatabase, Invoke-DbaQuery" -ForegroundColor Gray
+} else {
+    Write-Host "  [--] DBATools not installed (optional)" -ForegroundColor Yellow
+    Write-Host "       Install: Install-Module -Name dbatools -Scope CurrentUser" -ForegroundColor Gray
+}
+
+# Check for First Responder Kit
+$frkProcs = Execute-SqlCommand @connParams -SqlScript "
+    SELECT name FROM sys.procedures 
+    WHERE name LIKE 'sp_Blitz%' AND is_ms_shipped = 0"
+if ($frkProcs -and $frkProcs.Rows.Count -gt 0) {
+    Write-Host "  [OK] First Responder Kit procedures deployed" -ForegroundColor Green
+    $frkProcs.Rows | ForEach-Object { Write-Host "       - $($_.name)" -ForegroundColor Gray }
+} else {
+    Write-Host "  [--] First Responder Kit not deployed" -ForegroundColor Yellow
+}
+
+# Check for SQL Agent jobs
+$jobs = Execute-SqlCommand @connParams -SqlScript "
+    SELECT name, enabled, description FROM msdb.dbo.sysjobs 
+    WHERE name LIKE 'SalesApp_%' OR name LIKE 'Practice_%' OR name LIKE 'WarehouseApp_%'
+    ORDER BY name"
+if ($jobs -and $jobs.Rows.Count -gt 0) {
+    Write-Host "`nSQL Agent Jobs:" -ForegroundColor Yellow
+    $jobs.Rows | ForEach-Object {
+        $status = if ($_.enabled -eq 1) { "Enabled" } else { "Disabled" }
+        Write-Host "  [$status] $($_.name)" -ForegroundColor Green
+    }
+}
+
+Write-Host "`nDownloaded files: $OutputPath" -ForegroundColor Cyan
