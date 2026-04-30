@@ -20,21 +20,22 @@ PRINT '1. DATABASE STATUS';
 PRINT '------------------------------------------------------------';
 
 SELECT 
-    name AS DatabaseName,
-    state_desc AS Status,
-    recovery_model_desc AS RecoveryModel,
-    CAST(physical_size * 8 / 1024 AS BIGINT) AS SizeMB,
-    is_read_only AS ReadOnly,
-    is_broker_enabled AS BrokerEnabled
-FROM sys.databases
-WHERE state_desc != 'ONLINE'
-ORDER BY name;
+    d.name AS DatabaseName,
+    d.state_desc AS Status,
+    d.recovery_model_desc AS RecoveryModel,
+    CAST(SUM(mf.size) OVER(PARTITION BY d.name) * 8 / 1024 AS BIGINT) AS SizeMB,
+    d.is_read_only AS ReadOnly,
+    d.is_broker_enabled AS BrokerEnabled
+FROM sys.databases d
+JOIN sys.master_files mf ON d.database_id = mf.database_id
+WHERE d.state_desc != 'ONLINE'
+ORDER BY d.name;
 
 SELECT COUNT(*) AS OnlineDatabases,
-       SUM(CASE WHEN recovery_model_desc = 'FULL' THEN 1 ELSE 0 END) AS FullRecovery,
-       SUM(CASE WHEN recovery_model_desc = 'SIMPLE' THEN 1 ELSE 0 END) AS SimpleRecovery,
-       SUM(CASE WHEN recovery_model_desc = 'BULK_LOGGED' THEN 1 ELSE 0 END) AS BulkLogged
-FROM sys.databases;
+       SUM(CASE WHEN d.recovery_model_desc = 'FULL' THEN 1 ELSE 0 END) AS FullRecovery,
+       SUM(CASE WHEN d.recovery_model_desc = 'SIMPLE' THEN 1 ELSE 0 END) AS SimpleRecovery,
+       SUM(CASE WHEN d.recovery_model_desc = 'BULK_LOGGED' THEN 1 ELSE 0 END) AS BulkLogged
+FROM sys.databases d;
 
 PRINT '';
 PRINT '------------------------------------------------------------';
@@ -43,7 +44,7 @@ PRINT '------------------------------------------------------------';
 
 SELECT TOP 10
     d.name AS DatabaseName,
-    COALESCE(MAX(b.backup_finish_date), 'NEVER') AS LastFullBackup,
+    CASE WHEN MAX(b.backup_finish_date) IS NULL THEN 'NEVER' ELSE CAST(MAX(b.backup_finish_date) AS VARCHAR) END AS LastFullBackup,
     DATEDIFF(HOUR, MAX(b.backup_finish_date), GETDATE()) AS HoursSinceBackup,
     CASE 
         WHEN MAX(b.backup_finish_date) IS NULL THEN 'NO BACKUP'
@@ -62,19 +63,20 @@ PRINT '3. ACTIVE SESSIONS';
 PRINT '------------------------------------------------------------';
 
 SELECT TOP 20
-    SUBSTRING(s.program_name, 1, 30) AS Program,
-    s.login_name AS LoginName,
-    s.host_name AS HostName,
-    s.status AS Status,
-    s.cpu_time AS CPUTime,
-    s.memory_usage AS MemUsage,
-    s.logical_reads AS LogicalReads,
-    s.wait_type AS WaitType,
-    LEFT(s.text, 50) AS QuerySnippet
-FROM sys.dm_exec_requests s
-CROSS APPLY sys.dm_exec_sql_text(s.sql_handle) t
-WHERE s.session_id > 50
-ORDER BY s.cpu_time DESC;
+    SUBSTRING(sess.program_name, 1, 30) AS Program,
+    sess.login_name AS LoginName,
+    sess.host_name AS HostName,
+    r.status AS Status,
+    r.cpu_time AS CPUTime,
+    sess.memory_usage AS MemUsage,
+    sess.logical_reads AS LogicalReads,
+    r.wait_type AS WaitType,
+    LEFT(t.text, 50) AS QuerySnippet
+FROM sys.dm_exec_requests r
+JOIN sys.dm_exec_sessions sess ON r.session_id = sess.session_id
+CROSS APPLY sys.dm_exec_sql_text(r.sql_handle) t
+WHERE r.session_id > 50
+ORDER BY r.cpu_time DESC;
 
 PRINT '';
 PRINT '------------------------------------------------------------';
@@ -83,7 +85,7 @@ PRINT '------------------------------------------------------------';
 
 SELECT TOP 15
     wait_type,
-    waiting_task_count AS WaitCount,
+    waiting_tasks_count AS WaitCount,
     wait_time_ms AS WaitTimeMs,
     signal_wait_time_ms AS SignalWaitMs,
     CAST(wait_time_ms * 100.0 / NULLIF(SUM(wait_time_ms) OVER(), 0) AS DECIMAL(5,2)) AS Pct
@@ -102,16 +104,17 @@ SELECT TOP 10
     blocked.status AS BlockedStatus,
     blocked.wait_time AS WaitTimeMs,
     blocked.blocking_session_id AS BlockingSession,
-    blocker.status AS BlockerStatus,
-    blocker.login_name AS BlockerLogin,
-    blocker.program_name AS BlockerProgram,
+    bs.status AS BlockerStatus,
+    bs.login_name AS BlockerLogin,
+    bs.program_name AS BlockerProgram,
     blocker.wait_time AS BlockerWaitMs,
     COALESCE(blocked_text.text, '') AS BlockedQuery,
     COALESCE(blocker_text.text, '') AS BlockerQuery
 FROM sys.dm_exec_requests blocked
+JOIN sys.dm_exec_sessions bs ON blocked.blocking_session_id = bs.session_id
 LEFT JOIN sys.dm_exec_requests blocker ON blocked.blocking_session_id = blocker.session_id
 CROSS APPLY sys.dm_exec_sql_text(blocked.sql_handle) blocked_text
-CROSS APPLY sys.dm_exec_sql_text(blocker.sql_handle) blocker_text
+OUTER APPLY sys.dm_exec_sql_text(blocker.sql_handle) blocker_text
 WHERE blocked.session_id > 50
   AND blocked.blocking_session_id > 0
 ORDER BY blocked.wait_time DESC;
@@ -171,23 +174,26 @@ PRINT '8. TEMPDB USAGE';
 PRINT '------------------------------------------------------------';
 
 SELECT 
-    files.name AS FileName,
-    files.size_in_bytes / 1024 / 1024 AS SizeMB,
-    files.used_space_in_bytes / 1024 / 1024 AS UsedMB,
-    files.used_space_in_bytes * 100.0 / NULLIF(files.size_in_bytes, 0) AS PctUsed
-FROM tempdb.sys.database_files files;
+    f.name AS FileName,
+    f.type_desc AS FileType,
+    CAST(f.size / 128.0 AS DECIMAL(10,2)) AS SizeMB,
+    CAST(fu.allocated_extent_page_count / 128.0 AS DECIMAL(10,2)) AS UsedMB,
+    CAST(fu.allocated_extent_page_count * 100.0 / NULLIF(f.size, 0) AS DECIMAL(5,2)) AS PctUsed
+FROM tempdb.sys.database_files f
+JOIN tempdb.sys.dm_db_file_space_usage fu ON f.file_id = fu.file_id;
 
 SELECT 
-    SU.login_name AS LoginName,
+    sess.login_name AS LoginName,
     ST.text AS QueryText,
-    r.requested_memory_kb / 1024 AS RequestedMB,
-    r.granted_memory_kb / 1024 AS GrantedMB,
+    mg.requested_memory_kb / 1024 AS RequestedMB,
+    mg.granted_memory_kb / 1024 AS GrantedMB,
     r.dop AS DOP
-FROM tempdb.sys.dm_exec_sessions SU
-JOIN sys.dm_exec_requests r ON SU.session_id = r.session_id
+FROM sys.dm_exec_sessions sess
+JOIN sys.dm_exec_requests r ON sess.session_id = r.session_id
+LEFT JOIN sys.dm_exec_query_memory_grants mg ON r.session_id = mg.session_id AND r.request_id = mg.request_id
 CROSS APPLY sys.dm_exec_sql_text(r.sql_handle) ST
-WHERE SU.session_id > 50
-ORDER BY r.granted_memory_kb DESC;
+WHERE sess.session_id > 50
+ORDER BY CASE WHEN mg.granted_memory_kb IS NULL THEN 1 ELSE 0 END, mg.granted_memory_kb DESC;
 
 PRINT '';
 PRINT '------------------------------------------------------------';
@@ -218,14 +224,17 @@ PRINT '------------------------------------------------------------';
 PRINT '10. ERROR LOG RECENT ERRORS';
 PRINT '------------------------------------------------------------';
 
-EXEC sp_executesql N'
+IF OBJECT_ID('tempdb..#ErrorLog') IS NOT NULL DROP TABLE #ErrorLog;
+CREATE TABLE #ErrorLog (LogDate DATETIME, ProcessInfo NVARCHAR(50), Text NVARCHAR(MAX));
+INSERT INTO #ErrorLog EXEC xp_readerrorlog 0, 1;
+
 SELECT TOP 10
-    logTime AS LogTime,
-    message AS Message
-FROM sys.fn_readerrorlog(0, 10, NULL, NULL)
-WHERE message LIKE ''%Error%'' OR message LIKE ''%Failed%'' OR message LIKE ''%Severity%''
-ORDER BY logTime DESC;
-';
+    LogDate,
+    Text AS Message
+FROM #ErrorLog
+WHERE Text LIKE '%Error%' OR Text LIKE '%Failed%' OR Text LIKE '%Severity%'
+ORDER BY LogDate DESC;
+DROP TABLE #ErrorLog;
 
 PRINT '';
 PRINT '============================================================';
