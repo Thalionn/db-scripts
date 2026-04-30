@@ -61,9 +61,12 @@ BEGIN
     
     DECLARE @EmailBody NVARCHAR(MAX);
     DECLARE @AlertName NVARCHAR(100);
+    DECLARE @CurrentValue INT;
+    DECLARE @AlertMsg NVARCHAR(500);
     DECLARE @Threshold INT;
     DECLARE @Email NVARCHAR(256);
-    DECLARE @Message NVARCHAR(500);
+    DECLARE @NotifMsg NVARCHAR(500);
+    DECLARE @MailSubject NVARCHAR(512);
     DECLARE @Results TABLE (AlertName NVARCHAR(100), CurrentValue INT, Message NVARCHAR(500));
     
     -- Check: Long Running Queries
@@ -126,7 +129,7 @@ BEGIN
       AND r.CurrentValue >= a.ThresholdValue;
     
     OPEN alert_cursor;
-    FETCH NEXT FROM alert_cursor INTO @AlertName, @Threshold, @Message, @Threshold, @Email, @Message;
+    FETCH NEXT FROM alert_cursor INTO @AlertName, @CurrentValue, @AlertMsg, @Threshold, @Email, @NotifMsg;
     
     WHILE @@FETCH_STATUS = 0
     BEGIN
@@ -139,15 +142,16 @@ BEGIN
         -- Queue email (requires Database Mail configured)
         IF @Email IS NOT NULL
         BEGIN
+            SET @MailSubject = 'SQL Server Alert: ' + @AlertName;
             EXEC msdb.dbo.sp_send_dbmail
                 @profile_name = 'DBATools',
                 @recipients = @Email,
-                @subject = 'SQL Server Alert: ' + @AlertName,
-                @body = @Message,
+                @subject = @MailSubject,
+                @body = @NotifMsg,
                 @body_format = 'TEXT';
         END
         
-        FETCH NEXT FROM alert_cursor INTO @AlertName, @Threshold, @Message, @Threshold, @Email, @Message;
+        FETCH NEXT FROM alert_cursor INTO @AlertName, @CurrentValue, @AlertMsg, @Threshold, @Email, @NotifMsg;
     END
     
     CLOSE alert_cursor;
@@ -170,6 +174,8 @@ BEGIN
     SET NOCOUNT ON;
     
     DECLARE @BlockingInfo NVARCHAR(MAX);
+    DECLARE @AlertSubject NVARCHAR(500);
+    DECLARE @AlertBody NVARCHAR(MAX);
     
     SELECT @BlockingInfo = (
         SELECT 
@@ -204,11 +210,14 @@ BEGIN
         -- Send email if configured
         IF @EmailRecipients IS NOT NULL
         BEGIN
+            SET @AlertSubject = 'SQL Server Blocking Alert - ' + @@SERVERNAME;
+            SET @AlertBody = 'Blocking sessions detected exceeding threshold.' + CHAR(10) + CHAR(10) + @BlockingInfo;
+            
             EXEC msdb.dbo.sp_send_dbmail
                 @profile_name = 'DBATools',
                 @recipients = @EmailRecipients,
-                @subject = 'SQL Server Blocking Alert - ' + @@SERVERNAME,
-                @body = 'Blocking sessions detected exceeding threshold.' + CHAR(10) + CHAR(10) + @BlockingInfo,
+                @subject = @AlertSubject,
+                @body = @AlertBody,
                 @body_format = 'TEXT';
         END
         

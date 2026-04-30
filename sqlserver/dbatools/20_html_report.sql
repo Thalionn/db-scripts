@@ -278,12 +278,22 @@ BEGIN
 
     IF @OutputDatabaseName IS NOT NULL AND @OutputTableName IS NOT NULL
     BEGIN
+        DECLARE @CreateTableSQL NVARCHAR(MAX);
+        DECLARE @InsertSQL NVARCHAR(MAX);
+        
+        SET @CreateTableSQL = N'CREATE TABLE ' + QUOTENAME(@OutputDatabaseName) + N'.dba.' + QUOTENAME(@OutputTableName) + N' (ReportID BIGINT IDENTITY, ServerName NVARCHAR(128), ReportDate DATETIME, HTMLReport NVARCHAR(MAX))';
+        
         IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = @OutputTableName AND schema_id = SCHEMA_ID('dba'))
         BEGIN
-            EXEC('CREATE TABLE ' + @OutputDatabaseName + '.dba.' + @OutputTableName + ' (ReportID BIGINT IDENTITY, ServerName NVARCHAR(128), ReportDate DATETIME, HTMLReport NVARCHAR(MAX))');
+            EXEC(@CreateTableSQL);
         END
 
-        EXEC('INSERT INTO ' + @OutputDatabaseName + '.dba.' + @OutputTableName + ' (ServerName, ReportDate, HTMLReport) VALUES (@ServerName, GETDATE(), @HTML)', @HTML = @HTML);
+        SET @InsertSQL = N'INSERT INTO ' + QUOTENAME(@OutputDatabaseName) + N'.dba.' + QUOTENAME(@OutputTableName) + N' (ServerName, ReportDate, HTMLReport) VALUES (@SrvName, GETDATE(), @HTMLContent)';
+        
+        EXEC sp_executesql 
+            @InsertSQL,
+            N'@SrvName NVARCHAR(128), @HTMLContent NVARCHAR(MAX)',
+            @SrvName = @ServerName, @HTMLContent = @HTML;
     END
 END
 GO

@@ -45,14 +45,14 @@ BEGIN
         p.name AS LoginName,
         p.type_desc AS LoginType,
         p.sid,
-        p.password_hash,
+        sl.password_hash,
         p.default_database_name,
         p.default_language_name,
         CASE p.type_desc
             WHEN 'SQL_LOGIN' THEN 
                 'USE [master];' + CHAR(13) + CHAR(10) +
                 'CREATE LOGIN [' + p.name + '] WITH PASSWORD = ' + 
-                CONVERT(VARCHAR(256), p.password_hash, 1) + ' HASHED, ' +
+                CONVERT(VARCHAR(256), sl.password_hash, 1) + ' HASHED, ' +
                 'SID = ' + CONVERT(VARCHAR(256), p.sid, 1) + ', ' +
                 'DEFAULT_DATABASE = [' + ISNULL(p.default_database_name, 'master') + '], ' +
                 'DEFAULT_LANGUAGE = [' + ISNULL(p.default_language_name, 'us_english') + '];'
@@ -70,6 +70,7 @@ BEGIN
             ELSE '-- Unsupported login type: ' + p.type_desc
         END AS CreateScript
     FROM sys.server_principals p
+    LEFT JOIN sys.sql_logins sl ON p.principal_id = sl.principal_id
     LEFT JOIN sys.certificates c ON p.name = c.name
     LEFT JOIN sys.asymmetric_keys ak ON p.name = ak.name
     WHERE p.type IN ('S', 'U', 'G', 'C', 'K')
@@ -149,43 +150,34 @@ BEGIN
         RETURN;
     END;
 
-    DECLARE @SQL NVARCHAR(MAX) = N'
-    PRINT ''-- Database: ' + @DatabaseName + ''';
-    PRINT ''''
+    DECLARE @SQL NVARCHAR(MAX);
 
-    PRINT ''-- STEP 1: Create Users for Logins''
-    PRINT 'USE [' + @DatabaseName + '];''
-    PRINT ''''
-
+    SET @SQL = N'
     SELECT 
         ''CREATE USER ['' + dp.name + ''] FOR LOGIN ['' + sp.name + ''];''
         AS CreateUserScript,
         dp.name AS DatabaseUser,
         sp.name AS ServerLogin,
         dp.default_schema_name
-    FROM $DatabaseName$.sys.database_principals dp
+    FROM ' + QUOTENAME(@DatabaseName) + N'.sys.database_principals dp
     JOIN sys.server_principals sp ON dp.sid = sp.sid
     WHERE dp.type IN (''S'', ''U'', ''G'')
       AND dp.name NOT LIKE ''##%''
-    ORDER BY dp.name;
+    ORDER BY dp.name;';
 
-    PRINT ''''
-    PRINT ''-- STEP 2: Add Users to Database Roles''
-    PRINT ''''
+    EXEC sp_executesql @SQL;
 
+    SET @SQL = N'
     SELECT 
         ''EXEC sp_addrolemember '''''' + dr.name + '''''', '''' + dp.name + '''''';''
         AS RoleMembershipScript,
         dp.name AS DatabaseUser,
         dr.name AS DatabaseRole
-    FROM $DatabaseName$.sys.database_principals dp
-    JOIN $DatabaseName$.sys.database_role_members drm ON dp.principal_id = drm.member_principal_id
-    JOIN $DatabaseName$.sys.database_principals dr ON drm.role_principal_id = dr.principal_id
+    FROM ' + QUOTENAME(@DatabaseName) + N'.sys.database_principals dp
+    JOIN ' + QUOTENAME(@DatabaseName) + N'.sys.database_role_members drm ON dp.principal_id = drm.member_principal_id
+    JOIN ' + QUOTENAME(@DatabaseName) + N'.sys.database_principals dr ON drm.role_principal_id = dr.principal_id
     WHERE dp.name NOT LIKE ''##%''
-    ORDER BY dr.name, dp.name;
-    ';
-
-    SET @SQL = REPLACE(@SQL, '$DatabaseName$', @DatabaseName);
+    ORDER BY dr.name, dp.name;';
 
     EXEC sp_executesql @SQL;
 END

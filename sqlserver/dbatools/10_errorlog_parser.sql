@@ -40,12 +40,14 @@ CREATE TABLE dba.ErrorLogSummary (
 GO
 
 CREATE OR ALTER PROCEDURE dba.CaptureErrorLog
-    @ServerName NVARCHAR(128) = @@SERVERNAME,
+    @ServerName NVARCHAR(128) = NULL,
     @DaysToCapture INT = 7,
     @ErrorSeverities NVARCHAR(50) = '17,18,19,20,21,22,23,24,25'
 AS
 BEGIN
     SET NOCOUNT ON;
+    
+    IF @ServerName IS NULL SET @ServerName = CAST(SERVERPROPERTY('ServerName') AS NVARCHAR(128));
     
     DECLARE @ArchiveNum INT;
     DECLARE @LogDate DATETIME;
@@ -160,7 +162,7 @@ GO
 
 CREATE OR ALTER VIEW dba.vDeadlocks
 AS
-SELECT 
+SELECT TOP (2147483647)
     ServerName,
     LogDate,
     LEFT(LogText, 2000) AS DeadlockSnippet

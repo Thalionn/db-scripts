@@ -22,10 +22,10 @@ BEGIN
         wait_type,
         wait_time_ms,
         signal_wait_time_ms,
-        waiting_task_count
+        waiting_tasks_count
     FROM sys.dm_os_wait_stats
     WHERE wait_time_ms > 0
-      AND waiting_task_count > 0;
+      AND waiting_tasks_count > 0;
     
     IF @ClearWaitStats = 1
     BEGIN
@@ -163,14 +163,14 @@ BEGIN
     
     SET @FragCursor = CURSOR FOR
     SELECT 
-        OBJECT_ID(dbid, objid) AS ObjectID,
+        OBJECT_ID(DB_ID(), object_id) AS ObjectID,
         indid,
-        OBJECT_NAME(id, dbid) AS TableName,
-        name AS IndexName,
-        CASE WHEN name IS NULL THEN 'HEAP' ELSE name END AS IndexName,
+        OBJECT_NAME(id, DB_ID()) AS TableName,
+        si.name AS IndexName,
+        CASE WHEN si.name IS NULL THEN 'HEAP' ELSE si.name END AS IndexName,
         ips.index_level_0_frag_pct AS FragPercent,
         ips.page_count AS PageCount
-    FROM sysindexes WITH (NOLOCK)
+    FROM sysindexes si WITH (NOLOCK)
     INNER JOIN sys.objects o ON OBJECT_NAME(id) = o.name
     CROSS APPLY (
         SELECT avg_fragmentation_in_percent AS index_level_0_frag_pct, page_count
@@ -180,7 +180,7 @@ BEGIN
     WHERE id > 100
       AND OBJECTPROPERTY(id, 'IsUserTable') = 1
       AND ips.page_count > @MinPageCount
-      AND ips.avg_fragmentation_in_percent BETWEEN @MinFragPercent AND @MaxFragPercent;
+      AND ips.index_level_0_frag_pct BETWEEN @MinFragPercent AND @MaxFragPercent;
     
     OPEN @FragCursor;
     FETCH NEXT FROM @FragCursor INTO @ObjectID, @IndexID, @TableName, @IndexName, @Frag, @Pages;
@@ -245,7 +245,7 @@ BEGIN
     )
     SELECT TOP (@Top)
         @ServerName,
-        DB_NAME(qs.database_id),
+        DB_NAME(DB_ID()),
         qs.query_hash,
         SUBSTRING(qt.text, 1, 1000),
         qs.execution_count,

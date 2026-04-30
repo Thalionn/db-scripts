@@ -33,12 +33,14 @@ GO
 CREATE OR ALTER FUNCTION dba.fn_GetDatabaseAge
 (
     @DatabaseName NVARCHAR(128),
-    @ServerName NVARCHAR(128) = @@SERVERNAME
+    @ServerName NVARCHAR(128) = NULL
 )
 RETURNS INT
 AS
 BEGIN
     DECLARE @OldestBackup DATE;
+    
+    IF @ServerName IS NULL SET @ServerName = CAST(SERVERPROPERTY('ServerName') AS NVARCHAR(128));
     
     SELECT TOP 1 @OldestBackup = CAST(BackupStart AS DATE)
     FROM dba.BackupHistory
@@ -55,7 +57,7 @@ GO
 CREATE OR ALTER FUNCTION dba.fn_GetBackupChainStatus
 (
     @DatabaseName NVARCHAR(128),
-    @ServerName NVARCHAR(128) = @@SERVERNAME
+    @ServerName NVARCHAR(128) = NULL
 )
 RETURNS NVARCHAR(20)
 AS
@@ -63,6 +65,8 @@ BEGIN
     DECLARE @FullBackup DATETIME;
     DECLARE @DiffBackup DATETIME;
     DECLARE @LogBackup DATETIME;
+    
+    IF @ServerName IS NULL SET @ServerName = CAST(SERVERPROPERTY('ServerName') AS NVARCHAR(128));
     
     SELECT TOP 1 @FullBackup = BackupStart
     FROM dba.BackupHistory

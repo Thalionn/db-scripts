@@ -147,7 +147,7 @@ BEGIN
         END AS Status
     FROM dba.GrowthProjection
     WHERE ConfidenceLevel != 'FILE_DETAIL'
-    ORDER BY DaysToExhaustion ASC NULLS LAST;
+    ORDER BY CASE WHEN DaysToExhaustion IS NULL THEN 1 ELSE 0 END, DaysToExhaustion ASC;
 END
 GO
 
