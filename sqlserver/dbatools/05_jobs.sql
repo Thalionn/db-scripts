@@ -40,8 +40,9 @@ EXEC msdb.dbo.sp_add_jobstep
     @on_fail_action = 2;
 GO
 
+-- Use unique schedule name to avoid conflicts on repeated runs
 EXEC msdb.dbo.sp_add_schedule
-    @schedule_name = 'Every15Minutes',
+    @schedule_name = 'Every15Minutes_WaitStats',
     @freq_type = 4,
     @freq_interval = 1,
     @freq_subday_type = 4,
@@ -50,7 +51,7 @@ GO
 
 EXEC msdb.dbo.sp_attach_schedule
     @job_name = 'DBATools - Capture Wait Stats',
-    @schedule_name = 'Every15Minutes';
+    @schedule_name = 'Every15Minutes_WaitStats';
 GO
 
 EXEC msdb.dbo.sp_add_jobserver
@@ -58,7 +59,6 @@ EXEC msdb.dbo.sp_add_jobserver
     @server_name = @@SERVERNAME;
 GO
 
--- ======================================================
 /* ====================================================== */
 -- Job: DBATools - Capture Perf Counters (every 5 minutes)
 /* ====================================================== */
@@ -91,8 +91,9 @@ EXEC msdb.dbo.sp_add_jobstep
     @on_fail_action = 2;
 GO
 
+-- Use unique schedule name to avoid conflicts on repeated runs
 EXEC msdb.dbo.sp_add_schedule
-    @schedule_name = 'Every5Minutes',
+    @schedule_name = 'Every5Minutes_PerfCounters',
     @freq_type = 4,
     @freq_interval = 1,
     @freq_subday_type = 4,
@@ -101,7 +102,7 @@ GO
 
 EXEC msdb.dbo.sp_attach_schedule
     @job_name = 'DBATools - Capture Performance Counters',
-    @schedule_name = 'Every5Minutes';
+    @schedule_name = 'Every5Minutes_PerfCounters';
 GO
 
 EXEC msdb.dbo.sp_add_jobserver
@@ -109,7 +110,6 @@ EXEC msdb.dbo.sp_add_jobserver
     @server_name = @@SERVERNAME;
 GO
 
--- ======================================================
 /* ====================================================== */
 -- Job: DBATools - Capture Database Sizes (every hour)
 /* ====================================================== */
@@ -142,8 +142,9 @@ EXEC msdb.dbo.sp_add_jobstep
     @on_fail_action = 2;
 GO
 
+-- Use unique schedule name to avoid conflicts on repeated runs
 EXEC msdb.dbo.sp_add_schedule
-    @schedule_name = 'Hourly',
+    @schedule_name = 'Hourly_DatabaseSizes',
     @freq_type = 4,
     @freq_interval = 1,
     @freq_subday_type = 4,
@@ -152,7 +153,7 @@ GO
 
 EXEC msdb.dbo.sp_attach_schedule
     @job_name = 'DBATools - Capture Database Sizes',
-    @schedule_name = 'Hourly';
+    @schedule_name = 'Hourly_DatabaseSizes';
 GO
 
 EXEC msdb.dbo.sp_add_jobserver
@@ -160,7 +161,6 @@ EXEC msdb.dbo.sp_add_jobserver
     @server_name = @@SERVERNAME;
 GO
 
--- ======================================================
 /* ====================================================== */
 -- Job: DBATools - Purge Old Data (daily at midnight)
 /* ====================================================== */
@@ -193,18 +193,18 @@ EXEC msdb.dbo.sp_add_jobstep
     @on_fail_action = 2;
 GO
 
+-- Use unique schedule name and remove deprecated @freq_hour parameter for SQL Server 2025 compatibility
 EXEC msdb.dbo.sp_add_schedule
-    @schedule_name = 'DailyMidnight',
+    @schedule_name = 'DailyMidnight_PurgeOldData',
     @freq_type = 4,
     @freq_interval = 1,
     @freq_subday_type = 1,
-    @freq_subday_interval = 0,
-    @freq_hour = 0;
+    @freq_subday_interval = 0;
 GO
 
 EXEC msdb.dbo.sp_attach_schedule
     @job_name = 'DBATools - Purge Old Data',
-    @schedule_name = 'DailyMidnight';
+    @schedule_name = 'DailyMidnight_PurgeOldData';
 GO
 
 EXEC msdb.dbo.sp_add_jobserver
@@ -212,7 +212,6 @@ EXEC msdb.dbo.sp_add_jobserver
     @server_name = @@SERVERNAME;
 GO
 
--- ======================================================
 /* ====================================================== */
 -- Job: DBATools - Capture Query Stats (every 30 minutes)
 /* ====================================================== */
@@ -245,8 +244,9 @@ EXEC msdb.dbo.sp_add_jobstep
     @on_fail_action = 2;
 GO
 
+-- Use unique schedule name to avoid conflicts on repeated runs
 EXEC msdb.dbo.sp_add_schedule
-    @schedule_name = 'Every30Minutes',
+    @schedule_name = 'Every30Minutes_QueryStats',
     @freq_type = 4,
     @freq_interval = 1,
     @freq_subday_type = 4,
@@ -255,7 +255,7 @@ GO
 
 EXEC msdb.dbo.sp_attach_schedule
     @job_name = 'DBATools - Capture Query Stats',
-    @schedule_name = 'Every30Minutes';
+    @schedule_name = 'Every30Minutes_QueryStats';
 GO
 
 EXEC msdb.dbo.sp_add_jobserver
@@ -263,7 +263,6 @@ EXEC msdb.dbo.sp_add_jobserver
     @server_name = @@SERVERNAME;
 GO
 
--- ======================================================
 /* ====================================================== */
 -- Create DBATools category if it doesn't exist
 /* ====================================================== */
@@ -273,6 +272,7 @@ IF NOT EXISTS (SELECT name FROM msdb.dbo.syscategories WHERE name = 'DBATools' A
 GO
 
 PRINT 'Agent jobs created successfully.';
+PRINT '';
 PRINT 'Jobs enabled:';
 PRINT '  - DBATools - Capture Wait Stats (every 15 min)';
 PRINT '  - DBATools - Capture Performance Counters (every 5 min)';
@@ -281,3 +281,4 @@ PRINT '  - DBATools - Capture Query Stats (every 30 min)';
 PRINT '  - DBATools - Purge Old Data (daily midnight)';
 PRINT '';
 PRINT 'Note: Each job validates that its corresponding procedure exists before attempting to create the job step.';
+PRINT 'Note: All schedules use unique names to avoid conflicts on repeated script runs.';
