@@ -8,9 +8,19 @@
 USE msdb;
 GO
 
+/* ====================================================== */
 -- Job: DBATools - Capture Wait Stats (every 15 minutes)
+/* ====================================================== */
+
 IF EXISTS (SELECT job_id FROM msdb.dbo.sysjobs WHERE name = 'DBATools - Capture Wait Stats')
     EXEC msdb.dbo.sp_delete_job @job_name = 'DBATools - Capture Wait Stats', @delete_unused_schedule = 1;
+GO
+
+-- Check that procedure exists before adding job step
+IF NOT EXISTS (SELECT 1 FROM sys.objects
+               WHERE object_id = OBJECT_ID(N'[DBATools].[dbo].CaptureWaitStats')
+               AND type IN ('P'))
+    RAISERROR('Procedure [DBATools.dba.CaptureWaitStats] does not exist. Please create it first.', 16, 1);
 GO
 
 EXEC msdb.dbo.sp_add_job
@@ -48,9 +58,20 @@ EXEC msdb.dbo.sp_add_jobserver
     @server_name = @@SERVERNAME;
 GO
 
+-- ======================================================
+/* ====================================================== */
 -- Job: DBATools - Capture Perf Counters (every 5 minutes)
+/* ====================================================== */
+
 IF EXISTS (SELECT job_id FROM msdb.dbo.sysjobs WHERE name = 'DBATools - Capture Performance Counters')
     EXEC msdb.dbo.sp_delete_job @job_name = 'DBATools - Capture Performance Counters', @delete_unused_schedule = 1;
+GO
+
+-- Check that procedure exists before adding job step
+IF NOT EXISTS (SELECT 1 FROM sys.objects
+               WHERE object_id = OBJECT_ID(N'[DBATools].[dbo].CapturePerfCounters')
+               AND type IN ('P'))
+    RAISERROR('Procedure [DBATools.dba.CapturePerfCounters] does not exist. Please create it first.', 16, 1);
 GO
 
 EXEC msdb.dbo.sp_add_job
@@ -88,9 +109,20 @@ EXEC msdb.dbo.sp_add_jobserver
     @server_name = @@SERVERNAME;
 GO
 
+-- ======================================================
+/* ====================================================== */
 -- Job: DBATools - Capture Database Sizes (every hour)
+/* ====================================================== */
+
 IF EXISTS (SELECT job_id FROM msdb.dbo.sysjobs WHERE name = 'DBATools - Capture Database Sizes')
     EXEC msdb.dbo.sp_delete_job @job_name = 'DBATools - Capture Database Sizes', @delete_unused_schedule = 1;
+GO
+
+-- Check that procedure exists before adding job step
+IF NOT EXISTS (SELECT 1 FROM sys.objects
+               WHERE object_id = OBJECT_ID(N'[DBATools].[dbo].CaptureDatabaseSizes')
+               AND type IN ('P'))
+    RAISERROR('Procedure [DBATools.dba.CaptureDatabaseSizes] does not exist. Please create it first.', 16, 1);
 GO
 
 EXEC msdb.dbo.sp_add_job
@@ -128,9 +160,20 @@ EXEC msdb.dbo.sp_add_jobserver
     @server_name = @@SERVERNAME;
 GO
 
+-- ======================================================
+/* ====================================================== */
 -- Job: DBATools - Purge Old Data (daily at midnight)
+/* ====================================================== */
+
 IF EXISTS (SELECT job_id FROM msdb.dbo.sysjobs WHERE name = 'DBATools - Purge Old Data')
     EXEC msdb.dbo.sp_delete_job @job_name = 'DBATools - Purge Old Data', @delete_unused_schedule = 1;
+GO
+
+-- Check that procedure exists before adding job step
+IF NOT EXISTS (SELECT 1 FROM sys.objects
+               WHERE object_id = OBJECT_ID(N'[DBATools].[dbo].PurgeOldData')
+               AND type IN ('P'))
+    RAISERROR('Procedure [DBATools.dba.PurgeOldData] does not exist. Please create it first.', 16, 1);
 GO
 
 EXEC msdb.dbo.sp_add_job
@@ -169,9 +212,20 @@ EXEC msdb.dbo.sp_add_jobserver
     @server_name = @@SERVERNAME;
 GO
 
+-- ======================================================
+/* ====================================================== */
 -- Job: DBATools - Capture Query Stats (every 30 minutes)
+/* ====================================================== */
+
 IF EXISTS (SELECT job_id FROM msdb.dbo.sysjobs WHERE name = 'DBATools - Capture Query Stats')
     EXEC msdb.dbo.sp_delete_job @job_name = 'DBATools - Capture Query Stats', @delete_unused_schedule = 1;
+GO
+
+-- Check that procedure exists before adding job step
+IF NOT EXISTS (SELECT 1 FROM sys.objects
+               WHERE object_id = OBJECT_ID(N'[DBATools].[dbo].CaptureQueryStats')
+               AND type IN ('P'))
+    RAISERROR('Procedure [DBATools.dba.CaptureQueryStats] does not exist. Please create it first.', 16, 1);
 GO
 
 EXEC msdb.dbo.sp_add_job
@@ -209,7 +263,11 @@ EXEC msdb.dbo.sp_add_jobserver
     @server_name = @@SERVERNAME;
 GO
 
+-- ======================================================
+/* ====================================================== */
 -- Create DBATools category if it doesn't exist
+/* ====================================================== */
+
 IF NOT EXISTS (SELECT name FROM msdb.dbo.syscategories WHERE name = 'DBATools' AND category_class = 1)
     EXEC msdb.dbo.sp_add_category @class = 'JOB', @type = 'LOCAL', @name = 'DBATools';
 GO
@@ -221,3 +279,5 @@ PRINT '  - DBATools - Capture Performance Counters (every 5 min)';
 PRINT '  - DBATools - Capture Database Sizes (hourly)';
 PRINT '  - DBATools - Capture Query Stats (every 30 min)';
 PRINT '  - DBATools - Purge Old Data (daily midnight)';
+PRINT '';
+PRINT 'Note: Each job validates that its corresponding procedure exists before attempting to create the job step.';
