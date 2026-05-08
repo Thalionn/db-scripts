@@ -8,6 +8,20 @@
 USE msdb;
 GO
 
+-- Create Daily8AM schedule (daily at 8:00 AM) if it does not exist
+-- Fixed: Replaced invalid @freq_hour parameter with @active_start_time
+IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysschedules WHERE name = 'Daily8AM')
+BEGIN
+    EXEC msdb.dbo.sp_add_schedule
+        @schedule_name = 'Daily8AM',
+        @freq_type = 4,
+        @freq_interval = 1,
+        @freq_subday_type = 1,
+        @freq_subday_interval = 0,
+        @active_start_time = 080000;
+END
+GO
+
 -- Alert Check Job (every 5 minutes)
 IF EXISTS (SELECT job_id FROM msdb.dbo.sysjobs WHERE name = 'DBATools - Alert Check')
     EXEC msdb.dbo.sp_delete_job @job_name = 'DBATools - Alert Check', @delete_unused_schedule = 1;
@@ -28,12 +42,17 @@ EXEC msdb.dbo.sp_add_jobstep
     @database_name = 'DBATools';
 GO
 
-EXEC msdb.dbo.sp_add_schedule
-    @schedule_name = 'Every5Minutes',
-    @freq_type = 4,
-    @freq_interval = 1,
-    @freq_subday_type = 4,
-    @freq_subday_interval = 5;
+-- Create Every5Minutes schedule if not exists
+IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysschedules WHERE name = 'Every5Minutes')
+BEGIN
+    EXEC msdb.dbo.sp_add_schedule
+        @schedule_name = 'Every5Minutes',
+        @freq_type = 4,
+        @freq_interval = 1,
+        @freq_subday_type = 4,
+        @freq_subday_interval = 5;
+END
+GO
 
 EXEC msdb.dbo.sp_attach_schedule
     @job_name = 'DBATools - Alert Check',
@@ -61,18 +80,23 @@ EXEC msdb.dbo.sp_add_jobstep
     @job_name = 'DBATools - Blocking Alert',
     @step_name = 'Check Blocking',
     @subsystem = 'TSQL',
-    @command = 'EXEC DBATools.dba.CheckBlockingAlert 
+    @command = 'EXEC DBATools.dba.CheckBlockingAlert
                 @ThresholdSeconds = 30,
                 @EmailRecipients = ''dba-team@yourcompany.com'';',  -- MODIFY THIS
     @database_name = 'DBATools';
 GO
 
-EXEC msdb.dbo.sp_add_schedule
-    @schedule_name = 'Every1Minute',
-    @freq_type = 4,
-    @freq_interval = 1,
-    @freq_subday_type = 4,
-    @freq_subday_interval = 1;
+-- Create Every1Minute schedule if not exists
+IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysschedules WHERE name = 'Every1Minute')
+BEGIN
+    EXEC msdb.dbo.sp_add_schedule
+        @schedule_name = 'Every1Minute',
+        @freq_type = 4,
+        @freq_interval = 1,
+        @freq_subday_type = 4,
+        @freq_subday_interval = 1;
+END
+GO
 
 EXEC msdb.dbo.sp_attach_schedule
     @job_name = 'DBATools - Blocking Alert',
@@ -104,12 +128,17 @@ EXEC msdb.dbo.sp_add_jobstep
     @database_name = 'DBATools';
 GO
 
-EXEC msdb.dbo.sp_add_schedule
-    @schedule_name = 'Every15Minutes',
-    @freq_type = 4,
-    @freq_interval = 1,
-    @freq_subday_type = 4,
-    @freq_subday_interval = 15;
+-- Create Every15Minutes schedule if not exists
+IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysschedules WHERE name = 'Every15Minutes')
+BEGIN
+    EXEC msdb.dbo.sp_add_schedule
+        @schedule_name = 'Every15Minutes',
+        @freq_type = 4,
+        @freq_interval = 1,
+        @freq_subday_type = 4,
+        @freq_subday_interval = 15;
+END
+GO
 
 EXEC msdb.dbo.sp_attach_schedule
     @job_name = 'DBATools - Error Log Capture',
@@ -141,14 +170,7 @@ EXEC msdb.dbo.sp_add_jobstep
     @database_name = 'DBATools';
 GO
 
-EXEC msdb.dbo.sp_add_schedule
-    @schedule_name = 'Daily8AM',
-    @freq_type = 4,
-    @freq_interval = 1,
-    @freq_subday_type = 1,
-    @freq_subday_interval = 0,
-    @freq_hour = 8;
-
+-- Attach pre-created Daily8AM schedule
 EXEC msdb.dbo.sp_attach_schedule
     @job_name = 'DBATools - Security Audit',
     @schedule_name = 'Daily8AM';
@@ -166,3 +188,4 @@ PRINT '  - DBATools - Error Log Capture (every 15 min)';
 PRINT '  - DBATools - Security Audit (daily 8 AM)';
 PRINT '';
 PRINT 'NOTE: Modify @EmailRecipients in blocking alert step before enabling.';
+GO

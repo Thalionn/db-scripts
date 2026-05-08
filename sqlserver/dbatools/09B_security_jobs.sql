@@ -8,7 +8,21 @@
 USE msdb;
 GO
 
--- Security Audit - Login Capture (daily)
+-- Create Daily8AM schedule (daily at 8:00 AM) if it does not exist
+-- Fixed: Replaced invalid @freq_hour parameter with @active_start_time
+IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysschedules WHERE name = 'Daily8AM')
+BEGIN
+    EXEC msdb.dbo.sp_add_schedule
+        @schedule_name = 'Daily8AM',
+        @freq_type = 4, -- Daily
+        @freq_interval = 1, -- Every 1 day
+        @freq_subday_type = 1, -- Run at the specified time
+        @freq_subday_interval = 0,
+        @active_start_time = 080000; -- 8:00 AM in HHMMSS format
+END
+GO
+
+-- Security Audit - Login Capture (daily at 8 AM)
 IF EXISTS (SELECT job_id FROM msdb.dbo.sysjobs WHERE name = 'DBATools - Security Audit - Logins')
     EXEC msdb.dbo.sp_delete_job @job_name = 'DBATools - Security Audit - Logins', @delete_unused_schedule = 1;
 GO
@@ -28,14 +42,6 @@ EXEC msdb.dbo.sp_add_jobstep
     @database_name = 'DBATools';
 GO
 
-EXEC msdb.dbo.sp_add_schedule
-    @schedule_name = 'Daily8AM',
-    @freq_type = 4,
-    @freq_interval = 1,
-    @freq_subday_type = 1,
-    @freq_subday_interval = 0,
-    @freq_hour = 8;
-
 EXEC msdb.dbo.sp_attach_schedule
     @job_name = 'DBATools - Security Audit - Logins',
     @schedule_name = 'Daily8AM';
@@ -46,7 +52,7 @@ EXEC msdb.dbo.sp_add_jobserver
     @server_name = @@SERVERNAME;
 GO
 
--- Security Audit - Role Members (daily)
+-- Security Audit - Role Members (daily at 8 AM)
 IF EXISTS (SELECT job_id FROM msdb.dbo.sysjobs WHERE name = 'DBATools - Security Audit - Roles')
     EXEC msdb.dbo.sp_delete_job @job_name = 'DBATools - Security Audit - Roles', @delete_unused_schedule = 1;
 GO
@@ -77,3 +83,4 @@ EXEC msdb.dbo.sp_add_jobserver
 GO
 
 PRINT 'Security audit jobs created (runs daily at 8 AM).';
+GO

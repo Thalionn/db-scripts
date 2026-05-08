@@ -18,7 +18,7 @@ BEGIN
 
     DECLARE @HTML NVARCHAR(MAX);
     DECLARE @ServerName NVARCHAR(128) = @@SERVERNAME;
-    DECLARE @ReportDate NVARCHAR(50) = CAST(GETDATE() AS VARCHAR);
+    DECLARE @ReportDate NVARCHAR(50) = CONVERT(VARCHAR, GETDATE(), 120);
     DECLARE @DBName NVARCHAR(128) = COALESCE(@DatabaseName, DB_NAME());
 
     SET @HTML = N'
@@ -29,7 +29,7 @@ BEGIN
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Database Health Report - ' + @ServerName + '</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { margin:0; padding:0; box-sizing: border-box; }
         body { font-family: ''Segoe UI'', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; padding: 20px; }
         .container { max-width: 1400px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .header { background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%); color: white; padding: 30px; border-radius: 8px 8px 0 0; }
@@ -64,8 +64,8 @@ BEGIN
         <div class="header">
             <h1>Database Health Report</h1>
             <div class="meta">
-                <strong>Server:</strong> ' + @ServerName + ' | 
-                <strong>Database:</strong> ' + @DBName + ' | 
+                <strong>Server:</strong> ' + @ServerName + ' |
+                <strong>Database:</strong> ' + @DBName + ' |
                 <strong>Generated:</strong> ' + @ReportDate + '
             </div>
         </div>
@@ -97,7 +97,7 @@ BEGIN
                     <div class="label">Backups (24h)</div>
                 </div>
             </div>
-            
+
             <div class="section" id="database">
                 <h2>Database Status</h2>
                 <table>
@@ -112,23 +112,29 @@ BEGIN
                     </thead>
                     <tbody>';
 
+    -- Fix: Replace non-existent physical_size with size from sys.master_files
     SELECT @HTML = @HTML + N'
                         <tr>
-                            <td>' + name + '</td>
-                            <td class="status-' + CASE WHEN state_desc = 'ONLINE' THEN 'ok' ELSE 'critical' END + '">' + state_desc + '</td>
-                            <td>' + recovery_model_desc + '</td>
-                            <td>' + CAST(CAST(physical_size * 8 / 1024 AS BIGINT) AS VARCHAR) + '</td>
-                            <td>' + ISNULL((SELECT TOP 1 CAST(backup_finish_date AS VARCHAR) FROM msdb.dbo.backupset b WHERE b.database_name = d.name ORDER BY backup_finish_date DESC), 'NEVER') + '</td>
+                            <td>' + d.name + '</td>
+                            <td class="status-' + CASE WHEN d.state_desc = 'ONLINE' THEN 'ok' ELSE 'critical' END + '">' + d.state_desc + '</td>
+                            <td>' + d.recovery_model_desc + '</td>
+                            <td>' + CAST(ISNULL(mf.TotalSizeMB, 0) AS VARCHAR) + '</td>
+                            <td>' + ISNULL((SELECT TOP 1 CONVERT(VARCHAR, b.backup_finish_date, 120) FROM msdb.dbo.backupset b WHERE b.database_name = d.name ORDER BY b.backup_finish_date DESC), 'NEVER') + '</td>
                         </tr>'
     FROM sys.databases d
-    WHERE name NOT IN ('tempdb')
-    ORDER BY name;
+    LEFT JOIN (
+        SELECT database_id, SUM(size) * 8 / 1024 AS TotalSizeMB
+        FROM sys.master_files
+        GROUP BY database_id
+    ) mf ON d.database_id = mf.database_id
+    WHERE d.name NOT IN ('tempdb')
+    ORDER BY d.name;
 
     SET @HTML = @HTML + N'
                     </tbody>
                 </table>
             </div>
-            
+
             <div class="section" id="backups">
                 <h2>Backup Status</h2>';
 
@@ -157,20 +163,20 @@ BEGIN
                         </tr>
                     </thead>
                     <tbody>';
-        
+
         SELECT @HTML = @HTML + N'
                         <tr>
-                            <td>' + DatabaseName + '</td>
-                            <td>' + ISNULL(CAST(LastFullBackup AS VARCHAR), 'NEVER') + '</td>
-                            <td>' + CAST(HoursSinceBackup AS VARCHAR) + '</td>
-                            <td class="status-' + CASE WHEN BackupStatus = 'OK' THEN 'ok' ELSE 'critical' END + '">' + BackupStatus + '</td>
+                            <td>' + x.DatabaseName + '</td>
+                            <td>' + ISNULL(CONVERT(VARCHAR, x.LastFullBackup, 120), 'NEVER') + '</td>
+                            <td>' + CAST(ISNULL(x.HoursSinceBackup, 999) AS VARCHAR) + '</td>
+                            <td class="status-' + CASE WHEN x.BackupStatus = 'OK' THEN 'ok' ELSE 'critical' END + '">' + x.BackupStatus + '</td>
                         </tr>'
         FROM (
-            SELECT 
+            SELECT
                 d.name AS DatabaseName,
                 MAX(b.backup_finish_date) AS LastFullBackup,
                 DATEDIFF(HOUR, MAX(b.backup_finish_date), GETDATE()) AS HoursSinceBackup,
-                CASE 
+                CASE
                     WHEN MAX(b.backup_finish_date) IS NULL THEN 'NO BACKUP'
                     WHEN DATEDIFF(HOUR, MAX(b.backup_finish_date), GETDATE()) > 24 THEN 'OVERDUE'
                     ELSE 'OK'
@@ -180,7 +186,7 @@ BEGIN
             WHERE d.name NOT IN ('tempdb')
             GROUP BY d.name
         ) x
-        WHERE BackupStatus != 'OK';
+        WHERE x.BackupStatus != 'OK';
 
         SET @HTML = @HTML + N'
                     </tbody>
@@ -196,7 +202,7 @@ BEGIN
 
     SET @HTML = @HTML + N'
             </div>
-            
+
             <div class="section" id="performance">
                 <h2>Top Waits</h2>
                 <table>
@@ -210,10 +216,11 @@ BEGIN
                     </thead>
                     <tbody>';
 
+    -- Fix: Replace waiting_task_count with waiting_tasks_count
     SELECT @HTML = @HTML + N'
                         <tr>
                             <td>' + wait_type + '</td>
-                            <td>' + CAST(waiting_task_count AS VARCHAR) + '</td>
+                            <td>' + CAST(waiting_tasks_count AS VARCHAR) + '</td>
                             <td>' + CAST(wait_time_ms AS VARCHAR) + '</td>
                             <td>' + CAST(CAST(wait_time_ms * 100.0 / NULLIF(SUM(wait_time_ms) OVER(), 0) AS DECIMAL(5,2)) AS VARCHAR) + '%</td>
                         </tr>'
@@ -226,7 +233,7 @@ BEGIN
                     </tbody>
                 </table>
             </div>
-            
+
             <div class="section" id="storage">
                 <h2>Storage Usage</h2>
                 <table>
@@ -243,28 +250,21 @@ BEGIN
 
     SELECT @HTML = @HTML + N'
                         <tr>
-                            <td>' + DB_NAME + '</td>
-                            <td>' + CAST(CAST(data_size_kb / 1024 AS BIGINT) AS VARCHAR) + '</td>
-                            <td>' + CAST(CAST(log_size_kb / 1024 AS BIGINT) AS VARCHAR) + '</td>
-                            <td>' + CAST(CAST((data_size_kb + log_size_kb) / 1024 AS BIGINT) AS VARCHAR) + '</td>
-                            <td>' + CAST(CAST(used_space_pct AS DECIMAL(5,2)) AS VARCHAR) + '%</td>
+                            <td>' + DB_NAME() + '</td>
+                            <td>' + CAST(CAST(SUM(CASE WHEN type = 0 THEN size END) / 128.0 AS DECIMAL(10,2)) AS VARCHAR) + '</td>
+                            <td>' + CAST(CAST(SUM(CASE WHEN type = 1 THEN size END) / 128.0 AS DECIMAL(10,2)) AS VARCHAR) + '</td>
+                            <td>' + CAST(CAST(SUM(size) / 128.0 AS DECIMAL(10,2)) AS VARCHAR) + '</td>
+                            <td>' + CAST(CAST(0 AS DECIMAL(5,2)) AS VARCHAR) + '%</td>
                         </tr>'
-    FROM (
-        SELECT 
-            DB_NAME() AS DB_Name,
-            SUM(CASE WHEN type = 0 THEN size END) / 128 AS data_size_kb,
-            SUM(CASE WHEN type = 1 THEN size END) / 128 AS log_size_kb,
-            0 AS used_space_pct
-        FROM sys.master_files
-        WHERE database_id = DB_ID()
-        GROUP BY database_id
-    ) x;
+    FROM sys.master_files
+    WHERE database_id = DB_ID()
+    GROUP BY database_id;
 
     SET @HTML = @HTML + N'
                     </tbody>
                 </table>
             </div>
-            
+
             <div class="footer">
                 <p>Generated by DBATools | Report Date: ' + @ReportDate + '</p>
                 <p>For questions or issues, contact your database administrator</p>
@@ -280,17 +280,18 @@ BEGIN
     BEGIN
         DECLARE @CreateTableSQL NVARCHAR(MAX);
         DECLARE @InsertSQL NVARCHAR(MAX);
-        
-        SET @CreateTableSQL = N'CREATE TABLE ' + QUOTENAME(@OutputDatabaseName) + N'.dba.' + QUOTENAME(@OutputTableName) + N' (ReportID BIGINT IDENTITY, ServerName NVARCHAR(128), ReportDate DATETIME, HTMLReport NVARCHAR(MAX))';
-        
+
+        SET @CreateTableSQL = N'CREATE TABLE ' + QUOTENAME(@OutputDatabaseName) + N'.dba.' + QUOTENAME(@OutputTableName) + N' (ReportID BIGINT IDENTITY(1,1) PRIMARY KEY, ServerName NVARCHAR(128), ReportDate DATETIME, HTMLReport NVARCHAR(MAX))';
+
         IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = @OutputTableName AND schema_id = SCHEMA_ID('dba'))
         BEGIN
             EXEC(@CreateTableSQL);
         END
 
+        -- Fix: Ensure correct parameter separator and syntax for INSERT
         SET @InsertSQL = N'INSERT INTO ' + QUOTENAME(@OutputDatabaseName) + N'.dba.' + QUOTENAME(@OutputTableName) + N' (ServerName, ReportDate, HTMLReport) VALUES (@SrvName, GETDATE(), @HTMLContent)';
-        
-        EXEC sp_executesql 
+
+        EXEC sp_executesql
             @InsertSQL,
             N'@SrvName NVARCHAR(128), @HTMLContent NVARCHAR(MAX)',
             @SrvName = @ServerName, @HTMLContent = @HTML;
@@ -301,3 +302,4 @@ GO
 PRINT 'HTML Health Report generator created.';
 PRINT 'Usage: EXEC dba.GenerateHTMLHealthReport;';
 PRINT 'Or: EXEC dba.GenerateHTMLHealthReport @DatabaseName = ''YourDB'', @OutputDatabaseName = ''DBATools'', @OutputTableName = ''HTMLReports'';';
+GO

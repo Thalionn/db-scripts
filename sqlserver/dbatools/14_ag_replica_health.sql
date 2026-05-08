@@ -8,6 +8,13 @@
 USE DBATools;
 GO
 
+-- Drop tables if they exist to allow re-running the script
+IF OBJECT_ID('dba.AGReplicaHealth', 'U') IS NOT NULL
+    DROP TABLE dba.AGReplicaHealth;
+IF OBJECT_ID('dba.AGDatabaseSync', 'U') IS NOT NULL
+    DROP TABLE dba.AGDatabaseSync;
+GO
+
 CREATE TABLE dba.AGReplicaHealth (
     HealthID BIGINT IDENTITY(1,1) PRIMARY KEY,
     ServerName NVARCHAR(128),
@@ -21,16 +28,11 @@ CREATE TABLE dba.AGReplicaHealth (
     OperationalState NVARCHAR(50),
     RecoveryHealth NVARCHAR(50),
     SynchronizationHealth NVARCHAR(50),
-    LastSyncedTime DATETIME,
-    LastRedoTime DATETIME,
-    RedoQueueSizeMB BIGINT,
-    LogSendQueueSizeMB BIGINT,
-    EstimatedRecoveryTime INT,
-    IsHealthy AS CASE 
-        WHEN OperationalState = 'Online' 
-         AND SynchronizationHealth = 'Healthy' 
-         AND RecoveryHealth = 'Online' THEN 1 
-        ELSE 0 
+    IsHealthy AS CASE
+        WHEN OperationalState = 'ONLINE'
+         AND SynchronizationHealth = 'HEALTHY'
+         AND RecoveryHealth = 'ONLINE' THEN 1
+        ELSE 0
     END,
     INDEX IX_AGHealth_Capture NONCLUSTERED (CaptureTime, AGName),
     INDEX IX_AGHealth_Replica NONCLUSTERED (ReplicaName, CaptureTime)
@@ -47,10 +49,8 @@ CREATE TABLE dba.AGDatabaseSync (
     IsLocal BIT,
     SynchronizationState NVARCHAR(50),
     SynchronizationHealth NVARCHAR(50),
-    LastLSN INT,
-    LastCommitLSN BIGINT,
+    LastCommitLSN NVARCHAR(50),
     LastCommitTime DATETIME,
-    LogStreamSizeMB BIGINT,
     INDEX IX_AGDB_Capture NONCLUSTERED (CaptureTime, AGName)
 );
 GO
@@ -60,71 +60,64 @@ CREATE OR ALTER PROCEDURE dba.CaptureAGHealth
 AS
 BEGIN
     SET NOCOUNT ON;
-    
+
     -- Check if AGs exist
     IF NOT EXISTS (SELECT 1 FROM sys.availability_groups)
     BEGIN
         PRINT 'No Availability Groups found on this instance.';
         RETURN;
     END
-    
-    -- Capture replica health
+
+    -- Capture replica health from sys.availability_groups, sys.availability_replicas, and sys.dm_hadr_availability_replica_states
     INSERT INTO dba.AGReplicaHealth (
         ServerName, AGName, ReplicaName, ReplicaRole, AvailabilityMode,
         FailoverMode, ConnectionState, OperationalState, RecoveryHealth,
-        SynchronizationHealth, LastSyncedTime, LastRedoTime, RedoQueueSizeMB,
-        LogSendQueueSizeMB, EstimatedRecoveryTime
+        SynchronizationHealth
     )
-    SELECT 
+    SELECT
         @ServerName,
         ag.name AS AGName,
         ar.replica_server_name AS ReplicaName,
-        ar.role_desc AS ReplicaRole,
+        rs.role_desc AS ReplicaRole,
         ar.availability_mode_desc AS AvailabilityMode,
         ar.failover_mode_desc AS FailoverMode,
         rs.connected_state_desc AS ConnectionState,
         rs.operational_state_desc AS OperationalState,
         rs.recovery_health_desc AS RecoveryHealth,
-        rs.synchronization_health_desc AS SynchronizationHealth,
-        rs.last_sent_time,
-        rs.last_received_time,
-        rs.last_redone_time,
-        CAST(rs.redo_rate / 1024.0 AS BIGINT) AS RedoQueueSizeMB,
-        CAST(rs.log_send_rate / 1024.0 AS BIGINT) AS LogSendQueueSizeMB,
-        rs.estimated_recovery_time,
-        CASE WHEN rs.role_desc = 'PRIMARY' THEN 1 ELSE 0 END AS IsPrimary
+        rs.synchronization_health_desc AS SynchronizationHealth
     FROM sys.availability_groups ag
     JOIN sys.availability_replicas ar ON ag.group_id = ar.group_id
     JOIN sys.dm_hadr_availability_replica_states rs ON ar.replica_id = rs.replica_id;
-    
-    -- Capture database sync state
+
+    -- Capture database sync state from sys.availability_databases_cluster, sys.availability_groups,
+    -- sys.availability_replicas, and sys.dm_hadr_database_replica_states
     INSERT INTO dba.AGDatabaseSync (
         ServerName, AGName, DatabaseName, ReplicaName, IsLocal,
         SynchronizationState, SynchronizationHealth, LastCommitLSN, LastCommitTime
     )
-    SELECT 
+    SELECT
         @ServerName,
         ag.name AS AGName,
-        d.database_name AS DatabaseName,
+        adc.database_name AS DatabaseName,
         ar.replica_server_name AS ReplicaName,
-        d.is_local,
-        d.synchronization_state_desc AS SynchronizationState,
-        d.synchronization_health_desc AS SynchronizationHealth,
-        d.last_sent_lsn,
-        d.last_commit_lsn,
-        d.last_commit_time
+        dbrs.is_local,
+        dbrs.synchronization_state_desc AS SynchronizationState,
+        dbrs.synchronization_health_desc AS SynchronizationHealth,
+        CONVERT(NVARCHAR(50), dbrs.last_commit_lsn, 1) AS LastCommitLSN,
+        dbrs.last_commit_time AS LastCommitTime
     FROM sys.availability_databases_cluster adc
     JOIN sys.availability_groups ag ON adc.group_id = ag.group_id
     JOIN sys.availability_replicas ar ON adc.group_id = ar.group_id
-    JOIN sys.dm_hadr_availability_database_states d ON adc.group_database_id = d.group_database_id;
-    
+    JOIN sys.dm_hadr_database_replica_states dbrs ON adc.group_database_id = dbrs.group_database_id
+        AND ar.replica_id = dbrs.replica_id;
+
     SELECT @@SERVERNAME AS ServerName, GETDATE() AS CaptureTime, @@ROWCOUNT AS RowsInserted;
 END
 GO
 
 CREATE OR ALTER VIEW dba.vAGReplicaHealth
 AS
-SELECT 
+SELECT
     ServerName,
     CaptureTime,
     AGName,
@@ -133,27 +126,17 @@ SELECT
     ConnectionState,
     OperationalState,
     SynchronizationHealth,
-    CASE 
-        WHEN RedoQueueSizeMB > 100 THEN 'HIGH LAG'
-        WHEN LogSendQueueSizeMB > 50 THEN 'SEND LAG'
-        ELSE 'OK'
-    END AS LagStatus,
-    LastSyncedTime,
-    CASE 
-        WHEN IsHealthy = 1 THEN 'HEALTHY'
-        ELSE 'UNHEALTHY'
-    END AS HealthStatus,
     CASE
-        WHEN ReplicaRole = 'PRIMARY' AND IsHealthy = 0 THEN 'ACTION REQUIRED'
-        ELSE ''
-    END AS ActionRequired
+        WHEN SynchronizationHealth = 'HEALTHY' THEN 'OK'
+        ELSE 'CHECK'
+    END AS HealthStatus
 FROM dba.AGReplicaHealth
 WHERE CaptureTime >= DATEADD(HOUR, -24, GETDATE());
 GO
 
 CREATE OR ALTER VIEW dba.vAGDatabaseSync
 AS
-SELECT 
+SELECT
     ServerName,
     CaptureTime,
     AGName,
@@ -170,26 +153,19 @@ GO
 
 CREATE OR ALTER VIEW dba.vAGFailoverHistory
 AS
-SELECT 
+SELECT
     ag.name AS AGName,
-    aro.primary_replica AS OldPrimary,
-    ar.primary_replica AS NewPrimary,
-    ars.role_desc AS CurrentRole,
-    ars.is_local
+    ar.replica_server_name AS ReplicaName,
+    rs.role_desc AS CurrentRole,
+    rs.is_local AS IsLocal,
+    rs.operational_state_desc AS OperationalState,
+    rs.synchronization_health_desc AS SynchronizationHealth
 FROM sys.availability_groups ag
-CROSS APPLY (
-    SELECT TOP 1 replica_server_name AS primary_replica
-    FROM sys.availability_replicas
-    WHERE group_id = ag.group_id AND role_desc = 'PRIMARY'
-) ar
-CROSS APPLY (
-    SELECT TOP 1 replica_server_name AS primary_replica
-    FROM sys.availability_replicas
-    WHERE group_id = ag.group_id AND role_desc = 'SECONDARY'
-) aro
-JOIN sys.dm_hadr_availability_replica_states ars ON ar.replica_id = ars.replica_id;
+JOIN sys.availability_replicas ar ON ag.group_id = ar.group_id
+JOIN sys.dm_hadr_availability_replica_states rs ON ar.replica_id = rs.replica_id;
 GO
 
 PRINT 'Availability Group monitoring created.';
 PRINT 'Run CaptureAGHealth every 5 minutes for history tracking.';
 PRINT 'Note: Returns message if no AGs exist on instance.';
+GO
