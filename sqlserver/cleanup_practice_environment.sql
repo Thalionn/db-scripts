@@ -1,6 +1,6 @@
 -- ============================================================================
 -- Cleanup Practice Environment Script
--- Drops all objects created by deploy_practice_environment.ps1
+-- Drops all objects created by 20B_deploy_practice_env_job.sql
 -- Run this before re-deploying to start fresh
 -- ============================================================================
 
