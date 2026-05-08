@@ -51,7 +51,7 @@ function Execute-SqlFile {
         foreach ($p in $paths) { if (Test-Path $p) { $sqlcmd = $p; break } }
     }
     try {
-        & $sqlcmd -S "(local)" -E -d master -i "$FilePath" -b -o "$log" 2>&1 | Out-Null
+        & $sqlcmd -S "(local)" -E -C -d master -i "$FilePath" -b -o "$log" 2>&1 | Out-Null
         $rc = $LASTEXITCODE
         if ($rc -ne 0) {
             $err = Get-Content "$log" -Tail 3
