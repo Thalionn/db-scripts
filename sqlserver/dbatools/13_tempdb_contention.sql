@@ -108,7 +108,7 @@ BEGIN
             FILEPROPERTY(mf.name, 'SpaceUsed') / 128.0 AS UsedMB,
             (mf.size - FILEPROPERTY(mf.name, 'SpaceUsed')) / 128.0 AS FreeMB
         FROM sys.master_files mf
-        WHERE mf.database_id = 2
+        WHERE mf.database_id = 2  -- TempDB is always database_id 2
     )
     SELECT
         FileName,

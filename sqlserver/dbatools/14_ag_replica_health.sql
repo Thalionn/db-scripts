@@ -11,6 +11,7 @@ GO
 -- Drop tables if they exist to allow re-running the script
 IF OBJECT_ID('dba.AGReplicaHealth', 'U') IS NOT NULL
     DROP TABLE dba.AGReplicaHealth;
+
 IF OBJECT_ID('dba.AGDatabaseSync', 'U') IS NOT NULL
     DROP TABLE dba.AGDatabaseSync;
 GO
@@ -68,7 +69,8 @@ BEGIN
         RETURN;
     END
 
-    -- Capture replica health from sys.availability_groups, sys.availability_replicas, and sys.dm_hadr_availability_replica_states
+    -- Capture replica health from sys.availability_groups, sys.availability_replicas,
+    -- and sys.dm_hadr_availability_replica_states
     INSERT INTO dba.AGReplicaHealth (
         ServerName, AGName, ReplicaName, ReplicaRole, AvailabilityMode,
         FailoverMode, ConnectionState, OperationalState, RecoveryHealth,
@@ -123,8 +125,11 @@ SELECT
     AGName,
     ReplicaName,
     ReplicaRole,
+    AvailabilityMode,
+    FailoverMode,
     ConnectionState,
     OperationalState,
+    RecoveryHealth,
     SynchronizationHealth,
     CASE
         WHEN SynchronizationHealth = 'HEALTHY' THEN 'OK'
@@ -159,7 +164,8 @@ SELECT
     rs.role_desc AS CurrentRole,
     rs.is_local AS IsLocal,
     rs.operational_state_desc AS OperationalState,
-    rs.synchronization_health_desc AS SynchronizationHealth
+    rs.synchronization_health_desc AS SynchronizationHealth,
+    rs.last_connect_error_number AS LastErrorNumber
 FROM sys.availability_groups ag
 JOIN sys.availability_replicas ar ON ag.group_id = ar.group_id
 JOIN sys.dm_hadr_availability_replica_states rs ON ar.replica_id = rs.replica_id;
