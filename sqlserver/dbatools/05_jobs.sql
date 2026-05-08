@@ -8,6 +8,24 @@
 USE msdb;
 GO
 
+-- Clean up orphaned schedules after job deletions below
+-- (Individual job deletions with @delete_unused_schedule = 1 handle most cleanup)
+DECLARE @sched_id INT;
+DECLARE sched_cursor CURSOR FOR
+SELECT s.schedule_id FROM msdb.dbo.sysschedules s
+WHERE s.name IN ('Every15Minutes_WaitStats','Every5Minutes_PerfCounters','Hourly_DatabaseSizes','DailyMidnight_PurgeOldData','Every30Minutes_QueryStats')
+  AND NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobschedules WHERE schedule_id = s.schedule_id);
+OPEN sched_cursor;
+FETCH NEXT FROM sched_cursor INTO @sched_id;
+WHILE @@FETCH_STATUS = 0
+BEGIN
+    EXEC msdb.dbo.sp_delete_schedule @schedule_id = @sched_id;
+    FETCH NEXT FROM sched_cursor INTO @sched_id;
+END
+CLOSE sched_cursor;
+DEALLOCATE sched_cursor;
+GO
+
 /* ====================================================== */
 -- Job: DBATools - Capture Wait Stats (every 15 minutes)
 /* ====================================================== */
@@ -17,10 +35,8 @@ IF EXISTS (SELECT job_id FROM msdb.dbo.sysjobs WHERE name = 'DBATools - Capture 
 GO
 
 -- Check that procedure exists before adding job step
-IF NOT EXISTS (SELECT 1 FROM sys.objects
-               WHERE object_id = OBJECT_ID(N'[DBATools].[dbo].CaptureWaitStats')
-               AND type IN ('P'))
-    RAISERROR('Procedure [DBATools.dba.CaptureWaitStats] does not exist. Please create it first.', 16, 1);
+IF OBJECT_ID(N'[DBATools].[dba].[CaptureWaitStats]') IS NULL
+    RAISERROR('Procedure DBATools.dba.CaptureWaitStats does not exist. Please create it first.', 16, 1);
 GO
 
 EXEC msdb.dbo.sp_add_job
@@ -40,7 +56,7 @@ EXEC msdb.dbo.sp_add_jobstep
     @on_fail_action = 2;
 GO
 
--- Use unique schedule name to avoid conflicts on repeated runs
+-- Schedule: Every 15 minutes
 EXEC msdb.dbo.sp_add_schedule
     @schedule_name = 'Every15Minutes_WaitStats',
     @freq_type = 4,
@@ -68,10 +84,8 @@ IF EXISTS (SELECT job_id FROM msdb.dbo.sysjobs WHERE name = 'DBATools - Capture 
 GO
 
 -- Check that procedure exists before adding job step
-IF NOT EXISTS (SELECT 1 FROM sys.objects
-               WHERE object_id = OBJECT_ID(N'[DBATools].[dbo].CapturePerfCounters')
-               AND type IN ('P'))
-    RAISERROR('Procedure [DBATools.dba.CapturePerfCounters] does not exist. Please create it first.', 16, 1);
+IF OBJECT_ID(N'[DBATools].[dba].[CapturePerfCounters]') IS NULL
+    RAISERROR('Procedure DBATools.dba.CapturePerfCounters does not exist. Please create it first.', 16, 1);
 GO
 
 EXEC msdb.dbo.sp_add_job
@@ -91,7 +105,7 @@ EXEC msdb.dbo.sp_add_jobstep
     @on_fail_action = 2;
 GO
 
--- Use unique schedule name to avoid conflicts on repeated runs
+-- Schedule: Every 5 minutes
 EXEC msdb.dbo.sp_add_schedule
     @schedule_name = 'Every5Minutes_PerfCounters',
     @freq_type = 4,
@@ -119,10 +133,8 @@ IF EXISTS (SELECT job_id FROM msdb.dbo.sysjobs WHERE name = 'DBATools - Capture 
 GO
 
 -- Check that procedure exists before adding job step
-IF NOT EXISTS (SELECT 1 FROM sys.objects
-               WHERE object_id = OBJECT_ID(N'[DBATools].[dbo].CaptureDatabaseSizes')
-               AND type IN ('P'))
-    RAISERROR('Procedure [DBATools.dba.CaptureDatabaseSizes] does not exist. Please create it first.', 16, 1);
+IF OBJECT_ID(N'[DBATools].[dba].[CaptureDatabaseSizes]') IS NULL
+    RAISERROR('Procedure DBATools.dba.CaptureDatabaseSizes does not exist. Please create it first.', 16, 1);
 GO
 
 EXEC msdb.dbo.sp_add_job
@@ -142,7 +154,7 @@ EXEC msdb.dbo.sp_add_jobstep
     @on_fail_action = 2;
 GO
 
--- Use unique schedule name to avoid conflicts on repeated runs
+-- Schedule: Hourly
 EXEC msdb.dbo.sp_add_schedule
     @schedule_name = 'Hourly_DatabaseSizes',
     @freq_type = 4,
@@ -170,10 +182,8 @@ IF EXISTS (SELECT job_id FROM msdb.dbo.sysjobs WHERE name = 'DBATools - Purge Ol
 GO
 
 -- Check that procedure exists before adding job step
-IF NOT EXISTS (SELECT 1 FROM sys.objects
-               WHERE object_id = OBJECT_ID(N'[DBATools].[dbo].PurgeOldData')
-               AND type IN ('P'))
-    RAISERROR('Procedure [DBATools.dba.PurgeOldData] does not exist. Please create it first.', 16, 1);
+IF OBJECT_ID(N'[DBATools].[dba].[PurgeOldData]') IS NULL
+    RAISERROR('Procedure DBATools.dba.PurgeOldData does not exist. Please create it first.', 16, 1);
 GO
 
 EXEC msdb.dbo.sp_add_job
@@ -193,7 +203,7 @@ EXEC msdb.dbo.sp_add_jobstep
     @on_fail_action = 2;
 GO
 
--- Use unique schedule name and remove deprecated @freq_hour parameter for SQL Server 2025 compatibility
+-- Schedule: Daily at midnight
 EXEC msdb.dbo.sp_add_schedule
     @schedule_name = 'DailyMidnight_PurgeOldData',
     @freq_type = 4,
@@ -221,10 +231,8 @@ IF EXISTS (SELECT job_id FROM msdb.dbo.sysjobs WHERE name = 'DBATools - Capture 
 GO
 
 -- Check that procedure exists before adding job step
-IF NOT EXISTS (SELECT 1 FROM sys.objects
-               WHERE object_id = OBJECT_ID(N'[DBATools].[dbo].CaptureQueryStats')
-               AND type IN ('P'))
-    RAISERROR('Procedure [DBATools.dba.CaptureQueryStats] does not exist. Please create it first.', 16, 1);
+IF OBJECT_ID(N'[DBATools].[dba].[CaptureQueryStats]') IS NULL
+    RAISERROR('Procedure DBATools.dba.CaptureQueryStats does not exist. Please create it first.', 16, 1);
 GO
 
 EXEC msdb.dbo.sp_add_job
@@ -244,7 +252,7 @@ EXEC msdb.dbo.sp_add_jobstep
     @on_fail_action = 2;
 GO
 
--- Use unique schedule name to avoid conflicts on repeated runs
+-- Schedule: Every 30 minutes
 EXEC msdb.dbo.sp_add_schedule
     @schedule_name = 'Every30Minutes_QueryStats',
     @freq_type = 4,
@@ -269,6 +277,23 @@ GO
 
 IF NOT EXISTS (SELECT name FROM msdb.dbo.syscategories WHERE name = 'DBATools' AND category_class = 1)
     EXEC msdb.dbo.sp_add_category @class = 'JOB', @type = 'LOCAL', @name = 'DBATools';
+GO
+
+-- Clean up orphaned schedules that weren't removed by job deletions
+DECLARE @sched_id INT;
+DECLARE sched_cursor CURSOR FOR
+SELECT s.schedule_id FROM msdb.dbo.sysschedules s
+WHERE s.name IN ('Every15Minutes_WaitStats','Every5Minutes_PerfCounters','Hourly_DatabaseSizes','DailyMidnight_PurgeOldData','Every30Minutes_QueryStats')
+  AND NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobschedules WHERE schedule_id = s.schedule_id);
+OPEN sched_cursor;
+FETCH NEXT FROM sched_cursor INTO @sched_id;
+WHILE @@FETCH_STATUS = 0
+BEGIN
+    EXEC msdb.dbo.sp_delete_schedule @schedule_id = @sched_id;
+    FETCH NEXT FROM sched_cursor INTO @sched_id;
+END
+CLOSE sched_cursor;
+DEALLOCATE sched_cursor;
 GO
 
 PRINT 'Agent jobs created successfully.';

@@ -10,10 +10,7 @@ SET NOCOUNT ON;
 SELECT 
     DatabaseID,
     DB_NAME(DatabaseID) AS database_name,
-    CASE FileType 
-        WHEN 0 THEN 'Row Data'
-        WHEN 1 THEN 'Log'
-    END AS file_type,
+    FileName,
     StartTime,
     EndTime,
     Duration,
@@ -25,7 +22,7 @@ SELECT
         WHEN EventClass = 92 THEN (IntegerData * 8.0 / 1024)
     END AS growth_mb
 FROM fn_trace_gettable(
-    CAST(SERVERPROPERTY('ErrorLogFileName') AS NVARCHAR(255)), 
+    (SELECT path FROM sys.traces WHERE is_default = 1), 
     DEFAULT
 )
 WHERE EventClass IN (92, 93)

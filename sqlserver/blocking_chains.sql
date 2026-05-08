@@ -35,11 +35,11 @@ SELECT
     REPLICATE('  ', bc.level) + CAST(bc.blocked_spid AS VARCHAR(10)) AS chain,
     s.login_name,
     s.status,
-    s.wait_type,
-    s.wait_time,
-    s.cpu_time,
+    r.wait_type,
+    r.wait_time,
+    r.cpu_time,
     DB_NAME(r.database_id) AS database_name,
-    LEFT(r.text, 150) AS current_query
+    LEFT(t.text, 150) AS current_query
 FROM BlockingChain bc
 JOIN sys.dm_exec_sessions s ON bc.blocked_spid = s.session_id
 JOIN sys.dm_exec_requests r ON bc.blocked_spid = r.session_id

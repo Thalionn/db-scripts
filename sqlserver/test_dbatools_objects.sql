@@ -6,8 +6,11 @@
 -- ============================================================================
 -- DBATools Objects Verification Script
 -- Verifies all DBATools database objects are properly installed
--- Run this on both SQL2022 and SQL2025 servers
+-- Run this on both servers after deployment
 -- ============================================================================
+
+USE DBATools;
+GO
 
 PRINT '========================================';
 PRINT 'DBATools Installation Verification Script';
@@ -42,62 +45,68 @@ SELECT
     CASE WHEN OBJECT_ID('dba.' + name, 'U') IS NOT NULL THEN 'OK' ELSE 'MISSING' END AS Status
 FROM (
     VALUES
-        ('ServerInventory'),
-        ('LoginAudit'),
-        ('WaitStatsHistory'),
-        ('PerfCounters'),
-        ('DatabaseSizeHistory'),
+        ('AGDatabaseSync'),
+        ('AGReplicaHealth'),
+        ('AlertConfiguration'),
         ('BackupHistory'),
-        ('IndexMaintenanceLog'),
-        ('JobHistorySummary'),
-        ('QueryStatsSnapshot'),
-        ('SecurityAuditLogins'),
-        ('SecurityAuditPermissions'),
-        ('SecurityAuditDDL'),
+        ('DatabaseDocumentation'),
+        ('DatabaseSizeHistory'),
+        ('DuplicateIndexAudit'),
         ('ErrorLogArchive'),
         ('ErrorLogSummary'),
-        ('AlertConfiguration'),
         ('GrowthProjection'),
+        ('IndexMaintenanceLog'),
+        ('IndexRecommendations'),
+        ('JobHistorySummary'),
+        ('LoginAudit'),
+        ('LoginTransferScript'),
+        ('PerfCounters'),
         ('PerformanceBaseline'),
         ('PerformanceVariance'),
-        ('DatabaseDocumentation'),
-        ('DuplicateIndexAudit'),
+        ('QueryStatsSnapshot'),
+        ('SecurityAuditDDL'),
+        ('SecurityAuditLogins'),
+        ('SecurityAuditPermissions'),
+        ('SecurityAuditRoleMembers'),
+        ('ServerInventory'),
         ('TempDBContentionHistory'),
-        ('AGReplicaHealth'),
-        ('AGDatabaseSync')
-) AS ExpectedTables(name)
-ORDER BY name;
+        ('WaitStatsHistory')
+    ) AS ExpectedTables(name)
+    ORDER BY name;
 
 SELECT @TableCount = COUNT(*)
 FROM (
     VALUES
-        ('ServerInventory'),
-        ('LoginAudit'),
-        ('WaitStatsHistory'),
-        ('PerfCounters'),
-        ('DatabaseSizeHistory'),
+        ('AGDatabaseSync'),
+        ('AGReplicaHealth'),
+        ('AlertConfiguration'),
         ('BackupHistory'),
-        ('IndexMaintenanceLog'),
-        ('JobHistorySummary'),
-        ('QueryStatsSnapshot'),
-        ('SecurityAuditLogins'),
-        ('SecurityAuditPermissions'),
-        ('SecurityAuditDDL'),
+        ('DatabaseDocumentation'),
+        ('DatabaseSizeHistory'),
+        ('DuplicateIndexAudit'),
         ('ErrorLogArchive'),
         ('ErrorLogSummary'),
-        ('AlertConfiguration'),
         ('GrowthProjection'),
+        ('IndexMaintenanceLog'),
+        ('IndexRecommendations'),
+        ('JobHistorySummary'),
+        ('LoginAudit'),
+        ('LoginTransferScript'),
+        ('PerfCounters'),
         ('PerformanceBaseline'),
         ('PerformanceVariance'),
-        ('DatabaseDocumentation'),
-        ('DuplicateIndexAudit'),
+        ('QueryStatsSnapshot'),
+        ('SecurityAuditDDL'),
+        ('SecurityAuditLogins'),
+        ('SecurityAuditPermissions'),
+        ('SecurityAuditRoleMembers'),
+        ('ServerInventory'),
         ('TempDBContentionHistory'),
-        ('AGReplicaHealth'),
-        ('AGDatabaseSync')
-) AS ExpectedTables(name)
+        ('WaitStatsHistory')
+    ) AS ExpectedTables(name)
 WHERE OBJECT_ID('dba.' + name, 'U') IS NOT NULL;
 
-PRINT '  Tables found: ' + CAST(@TableCount AS VARCHAR) + ' of 21 expected';
+PRINT '  Tables found: ' + CAST(@TableCount AS VARCHAR) + ' of 26 expected';
 PRINT '';
 
 -- =============================================
@@ -112,58 +121,66 @@ SELECT
     CASE WHEN OBJECT_ID('dba.' + name, 'V') IS NOT NULL THEN 'OK' ELSE 'MISSING' END AS Status
 FROM (
     VALUES
-        ('vWaitStatsCurrent'),
-        ('vWaitStatsTrend'),
-        ('vBackupStatus'),
-        ('vFailedLogins24Hours'),
-        ('vQueryPerformanceOutliers'),
-        ('vGrowthProjection'),
-        ('vDiskSpaceRisk'),
-        ('vTempDBContention'),
-        ('vTempDBHealthSummary'),
-        ('vAGReplicaHealth'),
+        ('vActiveAlerts'),
         ('vAGDatabaseSync'),
         ('vAGFailoverHistory'),
+        ('vAGReplicaHealth'),
+        ('vAlertHistory'),
         ('vBackupStatus'),
+        ('vDatabaseGrowthTrend'),
+        ('vDeadlocks'),
+        ('vDiskSpaceRisk'),
+        ('vDuplicateIndexes'),
+        ('vErrorLogSummary'),
         ('vFailedLogins24Hours'),
+        ('vGrowthProjection'),
+        ('vIndexMaintenanceSummary'),
+        ('vIndexRecommendations'),
+        ('vLoginAuditSummary'),
         ('vQueryPerformanceOutliers'),
         ('vRecentErrors'),
         ('vServerInventory'),
-        ('vAlertHistory'),
-        ('vIndexRecommendations'),
+        ('vSignificantVariances'),
+        ('vTempDBContention'),
+        ('vTempDBHealthSummary'),
         ('vUnusedIndexes'),
-        ('vDuplicateIndexes')
-) AS ExpectedViews(name)
-ORDER BY name;
+        ('vWaitStatsCurrent'),
+        ('vWaitStatsTrend')
+    ) AS ExpectedViews(name)
+    ORDER BY name;
 
 SELECT @ViewCount = COUNT(*)
 FROM (
     VALUES
-        ('vWaitStatsCurrent'),
-        ('vWaitStatsTrend'),
-        ('vBackupStatus'),
-        ('vFailedLogins24Hours'),
-        ('vQueryPerformanceOutliers'),
-        ('vGrowthProjection'),
-        ('vDiskSpaceRisk'),
-        ('vTempDBContention'),
-        ('vTempDBHealthSummary'),
-        ('vAGReplicaHealth'),
+        ('vActiveAlerts'),
         ('vAGDatabaseSync'),
         ('vAGFailoverHistory'),
+        ('vAGReplicaHealth'),
+        ('vAlertHistory'),
         ('vBackupStatus'),
+        ('vDatabaseGrowthTrend'),
+        ('vDeadlocks'),
+        ('vDiskSpaceRisk'),
+        ('vDuplicateIndexes'),
+        ('vErrorLogSummary'),
         ('vFailedLogins24Hours'),
+        ('vGrowthProjection'),
+        ('vIndexMaintenanceSummary'),
+        ('vIndexRecommendations'),
+        ('vLoginAuditSummary'),
         ('vQueryPerformanceOutliers'),
         ('vRecentErrors'),
         ('vServerInventory'),
-        ('vAlertHistory'),
-        ('vIndexRecommendations'),
+        ('vSignificantVariances'),
+        ('vTempDBContention'),
+        ('vTempDBHealthSummary'),
         ('vUnusedIndexes'),
-        ('vDuplicateIndexes')
-) AS ExpectedViews(name)
-WHERE OBJECT_ID('dba.' + name, 'V') IS NOT NULL;
+        ('vWaitStatsCurrent'),
+        ('vWaitStatsTrend')
+    ) AS ExpectedViews(name)
+    WHERE OBJECT_ID('dba.' + name, 'V') IS NOT NULL;
 
-PRINT '  Views found: ' + CAST(@ViewCount AS VARCHAR) + ' expected (check log for full list)';
+PRINT '  Views found: ' + CAST(@ViewCount AS VARCHAR) + ' of 25 expected';
 PRINT '';
 
 -- =============================================
@@ -178,72 +195,92 @@ SELECT
     CASE WHEN OBJECT_ID('dba.' + name, 'P') IS NOT NULL THEN 'OK' ELSE 'MISSING' END AS Status
 FROM (
     VALUES
-        ('CaptureWaitStats'),
-        ('CapturePerfCounters'),
+        ('AnalyzeTempDBContention'),
+        ('CalculateGrowthProjection'),
+        ('CaptureAGHealth'),
+        ('CaptureBaseline'),
+        ('CaptureDatabaseDocumentation'),
         ('CaptureDatabaseSizes'),
-        ('CaptureQueryStats'),
-        ('PurgeOldData'),
+        ('CaptureErrorLog'),
+        ('CaptureGrowthData'),
+        ('CaptureIndexRecommendations'),
         ('CaptureLoginAudit'),
+        ('CaptureLoginsForTransfer'),
+        ('CapturePerfCounters'),
+        ('CaptureQueryStats'),
         ('CaptureRoleMembership'),
         ('CaptureServerPermissions'),
-        ('CaptureAGHealth'),
         ('CaptureTempDBContention'),
-        ('CaptureErrorLog'),
+        ('CaptureWaitStats'),
         ('CheckAlerts'),
         ('CheckBlockingAlert'),
-        ('CalculateGrowthProjection'),
-        ('CaptureBaseline'),
+        ('CompareLogins'),
         ('CompareToBaseline'),
-        ('GenerateWeeklySummary'),
-        ('CaptureDatabaseDocumentation'),
-        ('GenerateDocumentation'),
-        ('GenerateQuickReference'),
         ('FindDuplicateIndexes'),
-        ('GenerateDropDuplicateScript'),
-        ('MarkDuplicateResolved'),
-        ('CaptureLoginsForTransfer'),
-        ('GenerateLoginTransferScript'),
         ('GenerateDatabaseUserScript'),
-        ('AnalyzeTempDBContention'),
-        ('GenerateHTMLHealthReport')
-) AS ExpectedProcs(name)
-ORDER BY name;
+        ('GenerateDocumentation'),
+        ('GenerateDropDuplicateScript'),
+        ('GenerateDropIndexScript'),
+        ('GenerateHTMLHealthReport'),
+        ('GenerateLoginTransferScript'),
+        ('GenerateQuickReference'),
+        ('GenerateWeeklySummary'),
+        ('GetIndexSpaceSavings'),
+        ('IndexMaintenance'),
+        ('LogBackup'),
+        ('LogFailedLogin'),
+        ('LogLoginEvent'),
+        ('MarkDuplicateResolved'),
+        ('MarkIndexImplemented'),
+        ('PurgeOldData')
+    ) AS ExpectedProcs(name)
+    ORDER BY name;
 
 SELECT @ProcCount = COUNT(*)
 FROM (
     VALUES
-        ('CaptureWaitStats'),
-        ('CapturePerfCounters'),
+        ('AnalyzeTempDBContention'),
+        ('CalculateGrowthProjection'),
+        ('CaptureAGHealth'),
+        ('CaptureBaseline'),
+        ('CaptureDatabaseDocumentation'),
         ('CaptureDatabaseSizes'),
-        ('CaptureQueryStats'),
-        ('PurgeOldData'),
+        ('CaptureErrorLog'),
+        ('CaptureGrowthData'),
+        ('CaptureIndexRecommendations'),
         ('CaptureLoginAudit'),
+        ('CaptureLoginsForTransfer'),
+        ('CapturePerfCounters'),
+        ('CaptureQueryStats'),
         ('CaptureRoleMembership'),
         ('CaptureServerPermissions'),
-        ('CaptureAGHealth'),
         ('CaptureTempDBContention'),
-        ('CaptureErrorLog'),
+        ('CaptureWaitStats'),
         ('CheckAlerts'),
         ('CheckBlockingAlert'),
-        ('CalculateGrowthProjection'),
-        ('CaptureBaseline'),
+        ('CompareLogins'),
         ('CompareToBaseline'),
-        ('GenerateWeeklySummary'),
-        ('CaptureDatabaseDocumentation'),
-        ('GenerateDocumentation'),
-        ('GenerateQuickReference'),
         ('FindDuplicateIndexes'),
-        ('GenerateDropDuplicateScript'),
-        ('MarkDuplicateResolved'),
-        ('CaptureLoginsForTransfer'),
-        ('GenerateLoginTransferScript'),
         ('GenerateDatabaseUserScript'),
-        ('AnalyzeTempDBContention'),
-        ('GenerateHTMLHealthReport')
+        ('GenerateDocumentation'),
+        ('GenerateDropDuplicateScript'),
+        ('GenerateDropIndexScript'),
+        ('GenerateHTMLHealthReport'),
+        ('GenerateLoginTransferScript'),
+        ('GenerateQuickReference'),
+        ('GenerateWeeklySummary'),
+        ('GetIndexSpaceSavings'),
+        ('IndexMaintenance'),
+        ('LogBackup'),
+        ('LogFailedLogin'),
+        ('LogLoginEvent'),
+        ('MarkDuplicateResolved'),
+        ('MarkIndexImplemented'),
+        ('PurgeOldData')
 ) AS ExpectedProcs(name)
 WHERE OBJECT_ID('dba.' + name, 'P') IS NOT NULL;
 
-PRINT '  Procedures found: ' + CAST(@ProcCount AS VARCHAR) + ' expected (check log for full list)';
+PRINT '  Procedures found: ' + CAST(@ProcCount AS VARCHAR) + ' of 38 expected';
 PRINT '';
 
 -- =============================================
@@ -258,22 +295,24 @@ SELECT
     CASE WHEN OBJECT_ID('dba.' + name, 'FN') IS NOT NULL THEN 'OK' ELSE 'MISSING' END AS Status
 FROM (
     VALUES
-        ('fn_CalcDateDiff'),
-        ('fn_GetBackupStatus'),
-        ('fn_CalcFragDelta')
-) AS ExpectedFuncs(name)
-ORDER BY name;
+        ('fn_CalcFragDelta'),
+        ('fn_FormatBytes'),
+        ('fn_GetBackupChainStatus'),
+        ('fn_GetDatabaseAge')
+    ) AS ExpectedFuncs(name)
+    ORDER BY name;
 
 SELECT @FuncCount = COUNT(*)
 FROM (
     VALUES
-        ('fn_CalcDateDiff'),
-        ('fn_GetBackupStatus'),
-        ('fn_CalcFragDelta')
-) AS ExpectedFuncs(name)
+        ('fn_CalcFragDelta'),
+        ('fn_FormatBytes'),
+        ('fn_GetBackupChainStatus'),
+        ('fn_GetDatabaseAge')
+    ) AS ExpectedFuncs(name)
 WHERE OBJECT_ID('dba.' + name, 'FN') IS NOT NULL;
 
-PRINT '  Functions found: ' + CAST(@FuncCount AS VARCHAR) + ' of 3 expected';
+PRINT '  Functions found: ' + CAST(@FuncCount AS VARCHAR) + ' of 4 expected';
 PRINT '';
 
 -- =============================================
@@ -320,19 +359,19 @@ ELSE
     PRINT '  Tables: ' + CAST(@TableCount AS VARCHAR) + ' [INCOMPLETE]';
 
 -- View count
-IF @ViewCount >= 15
+IF @ViewCount >= 23
     PRINT '  Views: ' + CAST(@ViewCount AS VARCHAR) + ' [OK]';
 ELSE
     PRINT '  Views: ' + CAST(@ViewCount AS VARCHAR) + ' [INCOMPLETE]';
 
 -- Procedure count
-IF @ProcCount >= 25
+IF @ProcCount >= 35
     PRINT '  Procedures: ' + CAST(@ProcCount AS VARCHAR) + ' [OK]';
 ELSE
     PRINT '  Procedures: ' + CAST(@ProcCount AS VARCHAR) + ' [INCOMPLETE]';
 
 -- Function count
-IF @FuncCount = 3
+IF @FuncCount = 4
     PRINT '  Functions: ' + CAST(@FuncCount AS VARCHAR) + ' [OK]';
 ELSE
     PRINT '  Functions: ' + CAST(@FuncCount AS VARCHAR) + ' [INCOMPLETE]';

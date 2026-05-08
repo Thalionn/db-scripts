@@ -9,7 +9,7 @@ SET NOCOUNT ON;
 
 SELECT TOP 20
     wait_type,
-    waiting_task_count,
+    waiting_tasks_count,
     wait_time_ms,
     signal_wait_time_ms,
     wait_time_ms - signal_wait_time_ms AS resource_wait_ms,
@@ -25,7 +25,7 @@ SELECT TOP 20
     END AS category
 FROM sys.dm_os_wait_stats
 WHERE wait_time_ms > 0
-  AND waiting_task_count > 0
+  AND waiting_tasks_count > 0
   AND wait_type NOT IN (
       'SLEEP_TASK', 'BROKER_TASK_STOP', 'BROKER_TO_FLUSH',
       'SQLTRACE_BUFFER_FLUSH', 'CLR_AUTO_EVENT', 'LAZYWRITER_SLEEP',

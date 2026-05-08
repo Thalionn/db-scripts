@@ -28,7 +28,7 @@ CREATE TABLE dba.SecurityAuditLogins (
 GO
 
 CREATE TABLE dba.SecurityAuditRoleMembers (
-    AuditID BIGIGINT IDENTITY(1,1) PRIMARY KEY,
+    AuditID BIGINT IDENTITY(1,1) PRIMARY KEY,
     ServerName NVARCHAR(128),
     AuditTime DATETIME DEFAULT GETDATE(),
     DatabaseName NVARCHAR(128),
@@ -98,11 +98,12 @@ BEGIN
     );
     
     INSERT INTO @CurrentLogins
-    SELECT name, type_desc, create_date, modify_date, 
-           is_policy_checked, is_expiration_checked, sid
-    FROM sys.server_principals
-    WHERE type IN ('S', 'U', 'G', 'C', 'K')
-      AND name NOT LIKE '##%';
+    SELECT sp.name, sp.type_desc, sp.create_date, sp.modify_date, 
+           COALESCE(sl.is_policy_checked, 0), COALESCE(sl.is_expiration_checked, 0), sp.sid
+    FROM sys.server_principals sp
+    LEFT JOIN sys.sql_logins sl ON sp.principal_id = sl.principal_id
+    WHERE sp.type IN ('S', 'U', 'G', 'C', 'K')
+      AND sp.name NOT LIKE '##%';
     
     -- Find new logins
     INSERT INTO dba.SecurityAuditLogins (

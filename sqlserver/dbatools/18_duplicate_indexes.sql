@@ -218,7 +218,7 @@ GO
 
 CREATE OR ALTER VIEW dba.vDuplicateIndexes
 AS
-SELECT 
+SELECT TOP 100
     AuditID,
     ServerName,
     CaptureTime,

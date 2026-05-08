@@ -78,7 +78,7 @@ BEGIN
     FROM sys.dm_exec_requests r
     CROSS APPLY sys.dm_exec_sql_text(r.sql_handle) t
     WHERE r.start_time < DATEADD(MINUTE, -5, GETDATE())
-      AND r.cmd NOT IN ('TASK MANAGER', 'KASTASKMGR');
+      AND r.command NOT IN ('TASK MANAGER', 'KASTASKMGR');
     
     -- Check: Blocking
     INSERT INTO @Results
@@ -191,12 +191,13 @@ BEGIN
         FROM sys.dm_exec_requests blocked
         JOIN sys.dm_exec_requests blocker ON blocked.blocking_session_id = blocker.session_id
         LEFT JOIN sys.dm_exec_sessions sblk ON blocker.session_id = sblk.session_id
-        LEFT JOIN sys.dm_exec_requests r ON blocker.session_id = r.request_id
+        LEFT JOIN sys.dm_exec_requests r ON blocker.session_id = r.session_id
         LEFT JOIN sys.dm_os_waiting_tasks w ON blocker.session_id = w.session_id
         CROSS APPLY sys.dm_exec_sql_text(blocker.sql_handle) t
         LEFT JOIN sys.dm_tran_locks tl ON blocker.session_id = tl.request_session_id
         LEFT JOIN sys.objects o ON tl.resource_associated_entity_id = o.object_id
         WHERE blocked.blocking_session_id > 0
+          AND r.wait_time IS NOT NULL
           AND r.wait_time > (@ThresholdSeconds * 1000)
         FOR JSON PATH
     );

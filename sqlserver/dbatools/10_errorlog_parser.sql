@@ -56,28 +56,33 @@ BEGIN
     DECLARE @Severity INT;
     DECLARE @LogType NVARCHAR(20);
     
+    DECLARE @ErrorLog TABLE (LogDate DATETIME, ProcessInfo NVARCHAR(100), LogText NVARCHAR(MAX));
+
+    INSERT INTO @ErrorLog
+    EXEC xp_readerrorlog 0, 1, NULL, NULL, NULL, NULL, 'asc';
+
     DECLARE error_cursor CURSOR FOR
     SELECT 
         LogDate,
         LEFT(ProcessInfo, 100),
-        Text,
+        LogText,
         CASE 
-            WHEN Text LIKE '%deadlock%' THEN 'Deadlock'
-            WHEN Text LIKE '%error%' THEN 'ERROR'
-            WHEN Text LIKE '%warning%' OR Text LIKE '%warn%' THEN 'WARNING'
+            WHEN LogText LIKE '%deadlock%' THEN 'Deadlock'
+            WHEN LogText LIKE '%error%' THEN 'ERROR'
+            WHEN LogText LIKE '%warning%' OR LogText LIKE '%warn%' THEN 'WARNING'
             ELSE 'INFO'
         END
-    FROM sys.fn_errorlog_extension(NULL, NULL)
+    FROM @ErrorLog
     WHERE LogDate >= DATEADD(DAY, -@DaysToCapture, GETDATE())
       AND (
-          Text LIKE '%error%'
-          OR Text LIKE '%failed%'
-          OR Text LIKE '%deadlock%'
-          OR Text LIKE '%corrupt%'
-          OR Text LIKE '%failover%'
-          OR Text LIKE '%suspect%'
-          OR Text LIKE '%cannot%'
-          OR Text LIKE '%could not%'
+          LogText LIKE '%error%'
+          OR LogText LIKE '%failed%'
+          OR LogText LIKE '%deadlock%'
+          OR LogText LIKE '%corrupt%'
+          OR LogText LIKE '%failover%'
+          OR LogText LIKE '%suspect%'
+          OR LogText LIKE '%cannot%'
+          OR LogText LIKE '%could not%'
       );
     
     OPEN error_cursor;

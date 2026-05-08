@@ -148,7 +148,7 @@ GO
 
 CREATE OR ALTER VIEW dba.vUnusedIndexes
 AS
-SELECT 
+SELECT TOP 100
     OBJECT_NAME(s.object_id) AS TableName,
     i.name AS IndexName,
     i.type_desc AS IndexType,

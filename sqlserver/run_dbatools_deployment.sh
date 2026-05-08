@@ -5,8 +5,9 @@
 # ============================================================================
 
 # Configuration
+# IMPORTANT: Set SQL_PASS as environment variable or edit below
 SQL_USER="zed"
-SQL_PASS="ZzCIBcUE9eB33n"
+SQL_PASS="${SQL_PASS:-YOUR_PASSWORD_HERE}"
 SCRIPT_DIR="/Users/drew/Documents/Repo/db-scripts/sqlserver/dbatools"
 LOG_DIR="/tmp/dbatools_deployment_$(date +%Y%m%d_%H%M%S)"
 
@@ -149,20 +150,20 @@ echo "  - 07_ola_backup_template.sql"
 echo "  - 08_index_maintenance_job.sql"
 echo "  - 11B_mail_setup.sql"
 echo ""
-```
-
-This shell script:
-
-1. **Defines configuration** - SQL credentials and script directory
-2. **Lists scripts in correct order** - With descriptions
-3. **Has `run_sql_script` function** - Runs each SQL file and logs output
-4. **Has `deploy_to_server` function** - Deploys all scripts to one server
-5. **Tests connectivity** - Before deploying to each server
-6. **Provides summary** - At the end showing deployed objects
-7. **Logs everything** - To a timestamped directory in `/tmp`
-8. **Skips problematic scripts** - Lists them at the end
-
-To run it:
-```bash
-chmod +x /Users/drew/Documents/Repo/db-scripts/sqlserver/run_dbatools_deployment.sh
-/Users/drew/Documents/Repo/db-scripts/sqlserver/run_dbatools_deployment.sh
+# ```
+#  
+# This shell script:
+#  
+# 1. Defines configuration - SQL credentials and script directory
+# 2. Lists scripts in correct order - With descriptions
+# 3. Has run_sql_script function - Runs each SQL file and logs output
+# 4. Has deploy_to_server function - Deploys all scripts to one server
+# 5. Tests connectivity - Before deploying to each server
+# 6. Provides summary - At the end showing deployed objects
+# 7. Logs everything - To a timestamped directory in /tmp
+# 8. Skips problematic scripts - Lists them at the end
+#  
+# To run it:
+# bash
+# chmod +x /Users/drew/Documents/Repo/db-scripts/sqlserver/run_dbatools_deployment.sh
+# /Users/drew/Documents/Repo/db-scripts/sqlserver/run_dbatools_deployment.sh

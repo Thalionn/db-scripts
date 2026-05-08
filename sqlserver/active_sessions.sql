@@ -20,12 +20,12 @@ SELECT
     s.total_elapsed_time,
     s.reads,
     s.writes,
-    s.wait_type,
-    s.wait_time,
-    s.blocking_session_id AS blocked_by,
-    LEFT(c.text, 100) AS current_query
+    r.wait_type,
+    r.wait_time,
+    r.blocking_session_id AS blocked_by,
+    LEFT(t.text, 100) AS current_query
 FROM sys.dm_exec_sessions s
-LEFT JOIN sys.dm_exec_connections c 
-    ON s.session_id = c.session_id
+LEFT JOIN sys.dm_exec_requests r ON s.session_id = r.session_id
+OUTER APPLY sys.dm_exec_sql_text(r.sql_handle) t
 WHERE s.is_user_process = 1
 ORDER BY s.status, s.session_id;

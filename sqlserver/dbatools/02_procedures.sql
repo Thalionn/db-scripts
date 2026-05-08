@@ -154,46 +154,44 @@ BEGIN
     DECLARE @SQL NVARCHAR(MAX);
     DECLARE @TableName NVARCHAR(256);
     DECLARE @IndexName NVARCHAR(256);
+    DECLARE @SchemaName NVARCHAR(128);
     DECLARE @Frag DECIMAL(5,2);
     DECLARE @Pages BIGINT;
     DECLARE @ObjectID INT;
-    DECLARE @IndexID INT;
+    DECLARE @DBID INT;
+    
+    SET @DBID = DB_ID(@DatabaseName);
     
     DECLARE @FragCursor CURSOR;
     
     SET @FragCursor = CURSOR FOR
     SELECT 
-        OBJECT_ID(DB_ID(), object_id) AS ObjectID,
-        indid,
-        OBJECT_NAME(id, DB_ID()) AS TableName,
-        si.name AS IndexName,
-        CASE WHEN si.name IS NULL THEN 'HEAP' ELSE si.name END AS IndexName,
-        ips.index_level_0_frag_pct AS FragPercent,
-        ips.page_count AS PageCount
-    FROM sysindexes si WITH (NOLOCK)
-    INNER JOIN sys.objects o ON OBJECT_NAME(id) = o.name
-    CROSS APPLY (
-        SELECT avg_fragmentation_in_percent AS index_level_0_frag_pct, page_count
-        FROM sys.dm_db_index_physical_stats(DB_ID(@DatabaseName), OBJECT_ID, NULL, NULL, 'LIMITED')
-        WHERE index_level = 0
-    ) ips
-    WHERE id > 100
-      AND OBJECTPROPERTY(id, 'IsUserTable') = 1
+        ips.object_id,
+        OBJECT_SCHEMA_NAME(ips.object_id, @DBID) AS SchemaName,
+        OBJECT_NAME(ips.object_id, @DBID) AS TableName,
+        i.name AS IndexName,
+        ips.avg_fragmentation_in_percent,
+        ips.page_count
+    FROM sys.dm_db_index_physical_stats(@DBID, NULL, NULL, NULL, 'LIMITED') ips
+    JOIN sys.indexes i ON ips.object_id = i.object_id AND ips.index_id = i.index_id
+    WHERE ips.object_id > 100
+      AND OBJECTPROPERTY(ips.object_id, 'IsUserTable') = 1
       AND ips.page_count > @MinPageCount
-      AND ips.index_level_0_frag_pct BETWEEN @MinFragPercent AND @MaxFragPercent;
+      AND ips.avg_fragmentation_in_percent BETWEEN @MinFragPercent AND @MaxFragPercent
+    ORDER BY ips.avg_fragmentation_in_percent DESC;
     
     OPEN @FragCursor;
-    FETCH NEXT FROM @FragCursor INTO @ObjectID, @IndexID, @TableName, @IndexName, @Frag, @Pages;
+    FETCH NEXT FROM @FragCursor INTO @ObjectID, @SchemaName, @TableName, @IndexName, @Frag, @Pages;
     
     WHILE @@FETCH_STATUS = 0
     BEGIN
         IF @Frag >= @RebuildThreshold
         BEGIN
-            SET @SQL = 'ALTER INDEX [' + @IndexName + '] ON [' + @DatabaseName + '].[dbo].[' + @TableName + '] REBUILD;';
+            SET @SQL = 'ALTER INDEX [' + @IndexName + '] ON [' + @DatabaseName + '].[' + @SchemaName + '].[' + @TableName + '] REBUILD;';
         END
         ELSE
         BEGIN
-            SET @SQL = 'ALTER INDEX [' + @IndexName + '] ON [' + @DatabaseName + '].[dbo].[' + @TableName + '] REORGANIZE;';
+            SET @SQL = 'ALTER INDEX [' + @IndexName + '] ON [' + @DatabaseName + '].[' + @SchemaName + '].[' + @TableName + '] REORGANIZE;';
         END
         
         INSERT INTO dba.IndexMaintenanceLog (ServerName, DatabaseName, TableName, IndexName, OperationType, FragBefore, PagesBefore)
@@ -221,7 +219,7 @@ BEGIN
             END CATCH
         END
         
-        FETCH NEXT FROM @FragCursor INTO @ObjectID, @IndexID, @TableName, @IndexName, @Frag, @Pages;
+        FETCH NEXT FROM @FragCursor INTO @ObjectID, @SchemaName, @TableName, @IndexName, @Frag, @Pages;
     END
     
     CLOSE @FragCursor;
