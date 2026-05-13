@@ -26,3 +26,6 @@ logs/
 *.bakup
 db-scripts/
 downloads/
+
+# Agent instructions
+AGENTS.md
