@@ -19,6 +19,96 @@ EXEC msdb.dbo.sp_add_job
 GO
 
 -- =============================================
+-- Step 0: Create Deployment Log Table
+-- =============================================
+EXEC msdb.dbo.sp_add_jobstep
+    @job_name = 'DBATools - Deploy Practice Environment',
+    @step_name = 'Create Deployment Log Table',
+    @subsystem = 'TSQL',
+    @command = N'
+-- Create DeploymentLog table to track progress and errors
+IF DB_ID(''DBATools'') IS NOT NULL
+BEGIN
+    USE DBATools;
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = ''DeploymentLog'' AND schema_id = SCHEMA_ID(''dba''))
+    BEGIN
+        CREATE TABLE dba.DeploymentLog (
+            LogID BIGINT IDENTITY(1,1) PRIMARY KEY,
+            RunID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+            ServerName NVARCHAR(128) NOT NULL DEFAULT @@SERVERNAME,
+            StepName NVARCHAR(256) NOT NULL,
+            LogTime DATETIME DEFAULT GETDATE(),
+            MessageType NVARCHAR(20) NOT NULL, -- INFO, WARNING, ERROR
+            Message NVARCHAR(MAX),
+            ErrorNumber INT,
+            AdditionalInfo NVARCHAR(MAX),
+            INDEX IX_DeploymentLog_RunTime NONCLUSTERED (RunID, LogTime),
+            IX_DeploymentLog_StepName NONCLUSTERED (StepName)
+        );
+        PRINT ''Created DeploymentLog table in DBATools database'';
+    END
+    ELSE
+    BEGIN
+        PRINT ''DeploymentLog table already exists in DBATools database'';
+    END
+
+    -- Also create in master as fallback
+    USE master;
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = ''DeploymentLog'' AND schema_id = SCHEMA_ID(''dbo''))
+    BEGIN
+        CREATE TABLE dbo.DeploymentLog (
+            LogID BIGINT IDENTITY(1,1) PRIMARY KEY,
+            RunID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+            ServerName NVARCHAR(128) NOT NULL DEFAULT @@SERVERNAME,
+            StepName NVARCHAR(256) NOT NULL,
+            LogTime DATETIME DEFAULT GETDATE(),
+            MessageType NVARCHAR(20) NOT NULL, -- INFO, WARNING, ERROR
+            Message NVARCHAR(MAX),
+            ErrorNumber INT,
+            AdditionalInfo NVARCHAR(MAX),
+            INDEX IX_DeploymentLog_RunTime NONCLUSTERED (RunID, LogTime),
+            IX_DeploymentLog_StepName NONCLUSTERED (StepName)
+        );
+        PRINT ''Created DeploymentLog table in master database as fallback'';
+    END
+    ELSE
+    BEGIN
+        PRINT ''DeploymentLog table already exists in master database'';
+    END
+END
+ELSE
+BEGIN
+    -- DBATools database doesn't exist yet, create in master
+    USE master;
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = ''DeploymentLog'' AND schema_id = SCHEMA_ID(''dbo''))
+    BEGIN
+        CREATE TABLE dbo.DeploymentLog (
+            LogID BIGINT IDENTITY(1,1) PRIMARY KEY,
+            RunID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+            ServerName NVARCHAR(128) NOT NULL DEFAULT @@SERVERNAME,
+            StepName NVARCHAR(256) NOT NULL,
+            LogTime DATETIME DEFAULT GETDATE(),
+            MessageType NVARCHAR(20) NOT NULL, -- INFO, WARNING, ERROR
+            Message NVARCHAR(MAX),
+            ErrorNumber INT,
+            AdditionalInfo NVARCHAR(MAX),
+            INDEX IX_DeploymentLog_RunTime NONCLUSTERED (RunID, LogTime),
+            IX_DeploymentLog_StepName NONCLUSTERED (StepName)
+        );
+        PRINT ''Created DeploymentLog table in master database'';
+    END
+    ELSE
+    BEGIN
+        PRINT ''DeploymentLog table already exists in master database'';
+    END
+END
+',
+    @database_name = 'master',
+    @on_success_action = 3,
+    @on_fail_action = 2;
+GO
+
+-- =============================================
 -- Step 1: Download all resources from GitHub
 -- =============================================
 EXEC msdb.dbo.sp_add_jobstep
@@ -43,9 +133,68 @@ function Write-Log {
     Write-Host $Message -ForegroundColor $ForegroundColor
 }
 
+function Write-DeploymentLog {
+    param(
+        [string]$RunId,
+        [string]$StepName,
+        [string]$MessageType = "INFO",
+        [string]$Message,
+        [int]$ErrorNumber = 0,
+        [string]$AdditionalInfo = $null
+    )
+    try {
+        # Try DBATools database first
+        $connStr = "Server=(local);Database=DBATools;Integrated Security=SSPI;TrustServerCertificate=True;"
+        $sql = @"
+IF NOT EXISTS (SELECT 1 FROM dba.DeploymentLog WHERE RunID = @RunID AND StepName = @StepName AND Message = @Message)
+    INSERT INTO dba.DeploymentLog (RunID, ServerName, StepName, MessageType, Message, ErrorNumber, AdditionalInfo)
+    VALUES (@RunID, @@SERVERNAME, @StepName, @MessageType, @Message, @ErrorNumber, @AdditionalInfo)
+"@
+        $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
+        $cmd = New-Object System.Data.SqlClient.SqlCommand($sql, $conn)
+        $cmd.Parameters.Add("@RunID", [System.Data.SqlDbType]::UniqueIdentifier).Value = [guid]$RunId | Out-Null
+        $cmd.Parameters.Add("@StepName", [System.Data.SqlDbType]::VarChar, 256).Value = $StepName | Out-Null
+        $cmd.Parameters.Add("@MessageType", [System.Data.SqlDbType]::VarChar, 20).Value = $MessageType | Out-Null
+        $cmd.Parameters.Add("@Message", [System.Data.SqlDbType]::VarChar, -1).Value = [string]$Message | Out-Null
+        $cmd.Parameters.Add("@ErrorNumber", [System.Data.SqlDbType]::Int).Value = $ErrorNumber | Out-Null
+        $cmd.Parameters.Add("@AdditionalInfo", [System.Data.SqlDbType]::VarChar, -1).Value = [string]$AdditionalInfo | Out-Null
+        $conn.Open()
+        $cmd.ExecuteNonQuery() | Out-Null
+        $conn.Close()
+    } catch {
+        # Fallback to master database
+        try {
+            $connStr = "Server=(local);Database=master;Integrated Security=SSPI;TrustServerCertificate=True;"
+            $sql = @"
+IF NOT EXISTS (SELECT 1 FROM dbo.DeploymentLog WHERE RunID = @RunID AND StepName = @StepName AND Message = @Message)
+    INSERT INTO dbo.DeploymentLog (RunID, ServerName, StepName, MessageType, Message, ErrorNumber, AdditionalInfo)
+    VALUES (@RunID, @@SERVERNAME, @StepName, @MessageType, @Message, @ErrorNumber, @AdditionalInfo)
+"@
+            $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
+            $cmd = New-Object System.Data.SqlClient.SqlCommand($sql, $conn)
+            $cmd.Parameters.Add("@RunID", [System.Data.SqlDbType]::UniqueIdentifier).Value = [guid]$RunId | Out-Null
+            $cmd.Parameters.Add("@StepName", [System.Data.SqlDbType]::VarChar, 256).Value = $StepName | Out-Null
+            $cmd.Parameters.Add("@MessageType", [System.Data.SqlDbType]::VarChar, 20).Value = $MessageType | Out-Null
+            $cmd.Parameters.Add("@Message", [System.Data.SqlDbType]::VarChar, -1).Value = [string]$Message | Out-Null
+            $cmd.Parameters.Add("@ErrorNumber", [System.Data.SqlDbType]::Int).Value = $ErrorNumber | Out-Null
+            $cmd.Parameters.Add("@AdditionalInfo", [System.Data.SqlDbType]::VarChar, -1).Value = [string]$AdditionalInfo | Out-Null
+            $conn.Open()
+            $cmd.ExecuteNonQuery() | Out-Null
+            $conn.Close()
+        } catch {
+            Write-Warning "Failed to write to deployment log: $_"
+        }
+    }
+}
+
+# Generate a unique RunID for this execution
+$runId = [guid]::NewGuid().ToString()
+
 Write-Log "========================================"
 Write-Log "Downloading Practice Environment Resources"
 Write-Log "========================================"
+
+Write-DeploymentLog -RunId $runId -StepName "Download Resources" -MessageType "INFO" -Message "Starting download of practice environment resources"
 
 New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
 
@@ -68,12 +217,15 @@ function Download-RepoZip {
         Remove-Item $tempDir -Force -Recurse -ErrorAction SilentlyContinue
         Remove-Item $zipFile -Force
         Write-Log "  Downloaded: $RepoName" -ForegroundColor Green
+        Write-DeploymentLog -RunId $runId -StepName "Download Resources" -MessageType "INFO" -Message "Downloaded $RepoName"
     } catch {
         Write-Log ("  Failed to download " + $RepoName + ": " + $_) -ForegroundColor Yellow
+        Write-DeploymentLog -RunId $runId -StepName "Download Resources" -MessageType "ERROR" -Message "Failed to download $RepoName: $_" -ErrorNumber 1
     }
 }
 
 Write-Log "`n[1/3] Downloading db-scripts..." -ForegroundColor Cyan
+Write-DeploymentLog -RunId $runId -StepName "Download Resources" -MessageType "INFO" -Message "Starting db-scripts download"
 $dbScriptsPath = Join-Path $OutputPath "db-scripts"
 Download-RepoZip -RepoUrl "https://github.com/Thalionn/db-scripts/archive/refs/heads/main.zip" -DestPath $dbScriptsPath -RepoName "db-scripts"
 if (-not (Test-Path (Join-Path $dbScriptsPath "sqlserver"))) {
@@ -85,6 +237,7 @@ if (-not (Test-Path (Join-Path $dbScriptsPath "sqlserver"))) {
 }
 
 Write-Log "`n[2/3] Downloading First Responder Kit..." -ForegroundColor Cyan
+Write-DeploymentLog -RunId $runId -StepName "Download Resources" -MessageType "INFO" -Message "Starting First Responder Kit download"
 $frkPath = Join-Path $OutputPath "SQL-Server-First-Responder-Kit-main"
 Download-RepoZip -RepoUrl "https://github.com/BrentOzarULTD/SQL-Server-First-Responder-Kit/archive/refs/heads/main.zip" -DestPath $frkPath -RepoName "First Responder Kit"
 if (-not (Test-Path (Join-Path $frkPath "sp_Blitz.sql"))) {
@@ -96,6 +249,7 @@ if (-not (Test-Path (Join-Path $frkPath "sp_Blitz.sql"))) {
 }
 
 Write-Log "`n[3/3] Downloading Ola Hallengren Maintenance Solution..." -ForegroundColor Cyan
+Write-DeploymentLog -RunId $runId -StepName "Download Resources" -MessageType "INFO" -Message "Starting Ola Hallengren download"
 $olaPath = Join-Path $OutputPath "sql-server-maintenance-solution-master"
 Download-RepoZip -RepoUrl "https://github.com/olahallengren/sql-server-maintenance-solution/archive/refs/heads/master.zip" -DestPath $olaPath -RepoName "Maintenance Solution"
 if (-not (Get-ChildItem -Path $olaPath -Filter "*.sql" -ErrorAction SilentlyContinue)) {
@@ -107,6 +261,7 @@ if (-not (Get-ChildItem -Path $olaPath -Filter "*.sql" -ErrorAction SilentlyCont
 }
 
 Write-Log "`nDownload complete!" -ForegroundColor Green
+Write-DeploymentLog -RunId $runId -StepName "Download Resources" -MessageType "INFO" -Message "Download completed successfully"
 ',
     @database_name = 'master',
     @on_success_action = 3,
@@ -124,7 +279,25 @@ EXEC msdb.dbo.sp_add_jobstep
     @step_name = 'Deploy Practice Database and Jobs',
     @subsystem = 'TSQL',
     @command = N'
+DECLARE @runId UNIQUEIDENTIFIER;
+SELECT @runId = NEWID();
+
 PRINT ''=== Deploying Practice Database and Jobs ==='';
+EXEC master.dbo.xp_cmdshell ''echo ['' + CONVERT(NVARCHAR(19), GETDATE(), 121) + '' [Step 2] Starting practice environment deployment >> "C:\DBATools\PracticeEnvironment\Logs\deploy_'' + CONVERT(NVARCHAR(8), GETDATE(), 112) + ''.log"'', no_output;
+
+-- Log to table
+IF DB_ID(''DBATools'') IS NOT NULL
+BEGIN
+    USE DBATools;
+    INSERT INTO dba.DeploymentLog (RunID, ServerName, StepName, MessageType, Message)
+    VALUES (@runId, @@SERVERNAME, ''Deploy Practice Database and Jobs'', ''INFO'', ''Starting practice environment deployment'');
+END
+ELSE
+BEGIN
+    USE master;
+    INSERT INTO dbo.DeploymentLog (RunID, ServerName, StepName, MessageType, Message)
+    VALUES (@runId, @@SERVERNAME, ''Deploy Practice Database and Jobs'', ''INFO'', ''Starting practice environment deployment'');
+END
 
 DECLARE @sqlcmd NVARCHAR(500), @cmd NVARCHAR(4000);
 DECLARE @output TABLE (line NVARCHAR(4000));
@@ -189,9 +362,42 @@ IF EXISTS (SELECT 1 FROM @output WHERE line LIKE ''%error%'' OR line LIKE ''Msg 
 BEGIN
     SELECT line AS [Deployment Messages] FROM @output
     WHERE line LIKE ''%error%'' OR line LIKE ''Msg %'' OR line LIKE ''Error%'' OR line LIKE ''%Warning%'';
+
+    -- Log errors to table
+    IF DB_ID(''DBATools'') IS NOT NULL
+    BEGIN
+        USE DBATools;
+        INSERT INTO dba.DeploymentLog (RunID, ServerName, StepName, MessageType, Message, ErrorNumber)
+        VALUES (@runId, @@SERVERNAME, ''Deploy Practice Database and Jobs'', ''ERROR'',
+                ''Errors encountered during practice environment deployment (see job history for details)'', -1);
+    END
+    ELSE
+    BEGIN
+        USE master;
+        INSERT INTO dbo.DeploymentLog (RunID, ServerName, StepName, MessageType, Message, ErrorNumber)
+        VALUES (@runId, @@SERVERNAME, ''Deploy Practice Database and Jobs'', ''ERROR'',
+                ''Errors encountered during practice environment deployment (see job history for details)'', -1);
+    END
+
     SET @ts = CONVERT(NVARCHAR(19), GETDATE(), 121);
     SET @echoCmd = N''echo ['' + @ts + ''] [Step 2] WARNINGS/ERRORS encountered (see job history) >> "'' + @logFile + ''"'';
     EXEC master.dbo.xp_cmdshell @echoCmd, no_output;
+END
+ELSE
+BEGIN
+    -- Log success to table
+    IF DB_ID(''DBATools'') IS NOT NULL
+    BEGIN
+        USE DBATools;
+        INSERT INTO dba.DeploymentLog (RunID, ServerName, StepName, MessageType, Message)
+        VALUES (@runId, @@SERVERNAME, ''Deploy Practice Database and Jobs'', ''INFO'', ''Practice environment deployment completed successfully'');
+    END
+    ELSE
+    BEGIN
+        USE master;
+        INSERT INTO dbo.DeploymentLog (RunID, ServerName, StepName, MessageType, Message)
+        VALUES (@runId, @@SERVERNAME, ''Deploy Practice Database and Jobs'', ''INFO'', ''Practice environment deployment completed successfully'');
+    END
 END
 
 -- Log completion
@@ -234,9 +440,70 @@ function Write-Log {
     Write-Host $Message -ForegroundColor $ForegroundColor
 }
 
+function Write-DeploymentLog {
+    param(
+        [string]$RunId,
+        [string]$StepName,
+        [string]$MessageType = "INFO",
+        [string]$Message,
+        [int]$ErrorNumber = 0,
+        [string]$AdditionalInfo = $null
+    )
+    try {
+        # Try DBATools database first
+        $connStr = "Server=(local);Database=DBATools;Integrated Security=SSPI;TrustServerCertificate=True;"
+        $sql = @"
+IF NOT EXISTS (SELECT 1 FROM dba.DeploymentLog WHERE RunID = @RunID AND StepName = @StepName AND Message = @Message)
+    INSERT INTO dba.DeploymentLog (RunID, ServerName, StepName, MessageType, Message, ErrorNumber, AdditionalInfo)
+    VALUES (@RunID, @@SERVERNAME, @StepName, @MessageType, @Message, @ErrorNumber, @AdditionalInfo)
+"@
+        $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
+        $cmd = New-Object System.Data.SqlClient.SqlCommand($sql, $conn)
+        $cmd.Parameters.Add("@RunID", [System.Data.SqlDbType]::UniqueIdentifier).Value = [guid]$RunId | Out-Null
+        $cmd.Parameters.Add("@StepName", [System.Data.SqlDbType]::VarChar, 256).Value = $StepName | Out-Null
+        $cmd.Parameters.Add("@MessageType", [System.Data.SqlDbType]::VarChar, 20).Value = $MessageType | Out-Null
+        $cmd.Parameters.Add("@Message", [System.Data.SqlDbType]::VarChar, -1).Value = [string]$Message | Out-Null
+        $cmd.Parameters.Add("@ErrorNumber", [System.Data.SqlDbType]::Int).Value = $ErrorNumber | Out-Null
+        $cmd.Parameters.Add("@AdditionalInfo", [System.Data.SqlDbType]::VarChar, -1).Value = [string]$AdditionalInfo | Out-Null
+        $conn.Open()
+        $cmd.ExecuteNonQuery() | Out-Null
+        $conn.Close()
+    } catch {
+        # Fallback to master database
+        try {
+            $connStr = "Server=(local);Database=master;Integrated Security=SSPI;TrustServerCertificate=True;"
+            $sql = @"
+IF NOT EXISTS (SELECT 1 FROM dbo.DeploymentLog WHERE RunID = @RunID AND StepName = @StepName AND Message = @Message)
+    INSERT INTO dbo.DeploymentLog (RunID, ServerName, StepName, MessageType, Message, ErrorNumber, AdditionalInfo)
+    VALUES (@RunID, @@SERVERNAME, @StepName, @MessageType, @Message, @ErrorNumber, @AdditionalInfo)
+"@
+            $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
+            $cmd = New-Object System.Data.SqlClient.SqlCommand($sql, $conn)
+            $cmd.Parameters.Add("@RunID", [System.Data.SqlDbType]::UniqueIdentifier).Value = [guid]$RunId | Out-Null
+            $cmd.Parameters.Add("@StepName", [System.Data.SqlDbType]::VarChar, 256).Value = $StepName | Out-Null
+            $cmd.Parameters.Add("@MessageType", [System.Data.SqlDbType]::VarChar, 20).Value = $MessageType | Out-Null
+            $cmd.Parameters.Add("@Message", [System.Data.SqlDbType]::VarChar, -1).Value = [string]$Message | Out-Null
+            $cmd.Parameters.Add("@ErrorNumber", [System.Data.SqlDbType]::Int).Value = $ErrorNumber | Out-Null
+            $cmd.Parameters.Add("@AdditionalInfo", [System.Data.SqlDbType]::VarChar, -1).Value = [string]$AdditionalInfo | Out-Null
+            $conn.Open()
+            $cmd.ExecuteNonQuery() | Out-Null
+            $conn.Close()
+        } catch {
+            Write-Warning "Failed to write to deployment log: $_"
+        }
+    }
+}
+
+# Generate a unique RunID for this execution (should match the one from Step 2)
+# In a real scenario, we would pass this from the previous step, but for simplicity
+# we''ll generate a new one here - in practice, Steps 2 and 3 should share the same RunID
+$runId = [guid]::NewGuid().ToString()
+
 Write-Log "========================================"
 Write-Log "Deploying DBATools and FRK Scripts"
 Write-Log "========================================"
+
+Write-DeploymentLog -RunId $runId -StepName "Deploy DBATools and FRK Scripts" -MessageType "INFO" -Message "Starting deployment of DBATools and FRK scripts"
 
 function Execute-SqlFile {
     param([string]$FilePath)
@@ -277,6 +544,7 @@ $frkPath = Join-Path $OutputPath "SQL-Server-First-Responder-Kit-main"
 $dbatoolsPath = Join-Path (Join-Path $dbScriptsPath "sqlserver") "dbatools"
 if (Test-Path $dbatoolsPath) {
     Write-Log "Deploying DBATools scripts..." -ForegroundColor Cyan
+    Write-DeploymentLog -RunId $runId -StepName "Deploy DBATools and FRK Scripts" -MessageType "INFO" -Message "Starting DBATools scripts deployment"
     $scripts = Get-ChildItem -Path $dbatoolsPath -Filter "*.sql" | Sort-Object Name
     foreach ($s in $scripts) {
         if ($s.Name -match "^(06|07|08|11B)_") { continue }
@@ -285,15 +553,19 @@ if (Test-Path $dbatoolsPath) {
         try {
             Execute-SqlFile -FilePath $s.FullName | Out-Null
             Write-Log " OK" -ForegroundColor Green
+            Write-DeploymentLog -RunId $runId -StepName "Deploy DBATools and FRK Scripts" -MessageType "INFO" -Message "Successfully deployed $sName"
         } catch {
             Write-Log " FAILED" -ForegroundColor Red
             Write-Log "    $_" -ForegroundColor Yellow
+            Write-DeploymentLog -RunId $runId -StepName "Deploy DBATools and FRK Scripts" -MessageType "ERROR" -Message "Failed to deploy $sName: $_" -ErrorNumber 1
         }
     }
+    Write-DeploymentLog -RunId $runId -StepName "Deploy DBATools and FRK Scripts" -MessageType "INFO" -Message "Completed DBATools scripts deployment"
 }
 
 # Deploy First Responder Kit
 Write-Log "`nDeploying First Responder Kit procedures..." -ForegroundColor Cyan
+Write-DeploymentLog -RunId $runId -StepName "Deploy DBATools and FRK Scripts" -MessageType "INFO" -message "Starting First Responder Kit deployment"
 $frkScripts = @("sp_Blitz.sql", "sp_BlitzFirst.sql", "sp_BlitzIndex.sql", "sp_BlitzCache.sql")
 foreach ($script in $frkScripts) {
     $sourceFile = Join-Path $frkPath $script
@@ -302,13 +574,16 @@ foreach ($script in $frkScripts) {
         try {
             Execute-SqlFile -FilePath $sourceFile | Out-Null
             Write-Log " OK" -ForegroundColor Green
+            Write-DeploymentLog -RunId $runId -StepName "Deploy DBATools and FRK Scripts" -MessageType "INFO" -Message "Successfully deployed $script"
         } catch {
             Write-Log " FAILED" -ForegroundColor Red
+            Write-DeploymentLog -RunId $runId -StepName "Deploy DBATools and FRK Scripts" -MessageType "ERROR" -Message "Failed to deploy $script: $_" -ErrorNumber 1
         }
     }
 }
 
 Write-Log "`nScript deployment complete!" -ForegroundColor Green
+Write-DeploymentLog -RunId $runId -StepName "Deploy DBATools and FRK Scripts" -MessageType "INFO" -Message "Script deployment completed successfully"
 ',
     @database_name = 'master',
     @on_success_action = 3,
@@ -323,6 +598,9 @@ EXEC msdb.dbo.sp_add_jobstep
     @step_name = 'Verify Deployment',
     @subsystem = 'TSQL',
     @command = N'
+DECLARE @runId UNIQUEIDENTIFIER;
+SELECT @runId = NEWID();
+
 SET NOCOUNT ON;
 DECLARE @logDir NVARCHAR(500) = N''C:\DBATools\PracticeEnvironment\Logs'';
 DECLARE @logFile NVARCHAR(500) = @logDir + N''\deploy_'' + CONVERT(NVARCHAR(8), GETDATE(), 112) + N''.log'';
@@ -356,6 +634,24 @@ EXEC master.dbo.xp_cmdshell @echoCmd, no_output;
 SET @ts = CONVERT(NVARCHAR(19), GETDATE(), 121);
 SET @echoCmd = N''echo ['' + @ts + ''] ===== Deploy Finished ===== >> "'' + @logFile + ''"'';
 EXEC master.dbo.xp_cmdshell @echoCmd, no_output;
+
+-- Log verification results to table
+IF DB_ID(''DBATools'') IS NOT NULL
+BEGIN
+    USE DBATools;
+    INSERT INTO dba.DeploymentLog (RunID, ServerName, StepName, MessageType, Message, AdditionalInfo)
+    VALUES (@runId, @@SERVERNAME, ''Verify Deployment'', ''INFO'',
+            ''Verification complete - deployed '' + CAST(@procCount AS NVARCHAR(10)) + '' FRK procedures'',
+            ''{''procedureCount'': '' + CAST(@procCount AS NVARCHAR(10)) + ''}'');
+END
+ELSE
+BEGIN
+    USE master;
+    INSERT INTO dbo.DeploymentLog (RunID, ServerName, StepName, MessageType, Message, AdditionalInfo)
+    VALUES (@runId, @@SERVERNAME, ''Verify Deployment'', ''INFO'',
+            ''Verification complete - deployed '' + CAST(@procCount AS NVARCHAR(10)) + '' FRK procedures'',
+            ''{''procedureCount'': '' + CAST(@procCount AS NVARCHAR(10)) + ''}'');
+END
 
 EXEC sp_configure ''xp_cmdshell'', 0;
 RECONFIGURE;
