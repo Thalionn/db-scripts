@@ -21,26 +21,27 @@ PRINT '--- SECTION 1: Instance-Level Settings ---';
 PRINT '--- Requires restart after execution ---';
 PRINT '';
 
-PRINT '
--- Run these manually if needed (requires restart):
+PRINT 'EXEC sp_configure ''show advanced options'', 1;';
+PRINT 'RECONFIGURE WITH OVERRIDE;';
 
--- 1. Max Degree of Parallelism (DOP)
--- Rule of thumb: 0 for 8 or fewer cores, or (cores / 8) 
-EXEC sp_configure ''show advanced options'', 1;
-RECONFIGURE;
-EXEC sp_configure ''max degree of parallelism'', 4;  -- Adjust to your CPU count
-RECONFIGURE;
+PRINT '';
+PRINT 'EXEC sp_configure ''max degree of parallelism'', 0;';
+PRINT 'PRINT ''Consider setting: (number of physical cores / 8) or leave as 0 for OLTP'';';
+PRINT 'RECONFIGURE WITH OVERRIDE;';
 
--- 2. Cost Threshold for Parallelism
--- Increase from default 5 if OLTP workload
-EXEC sp_configure ''cost threshold for parallelism'', 50;
-RECONFIGURE;
+PRINT '';
+PRINT 'EXEC sp_configure ''cost threshold for parallelism'', 5;';
+PRINT 'PRINT ''Increase to higher value for OLTP workloads'';';
+PRINT 'RECONFIGURE WITH OVERRIDE;';
 
--- 3. Max Server Memory (MB)
--- Reserve 4GB for OS + 1GB per 32GB of RAM
-EXEC sp_configure ''max server memory'', 24576;  -- Adjust to your RAM
-RECONFIGURE;
-';
+PRINT '';
+PRINT 'EXEC sp_configure ''max server memory (MB)'', CASE @@SERVERPROPERTY(''EngineEdition') WHEN 3 THEN 14336 ELSE 24576 END;';
+PRINT 'PRINT ''Adjust Max Server Memory: 32GB RAM = 14336, higher RAM = increase accordingly'';';
+PRINT 'RECONFIGURE WITH OVERRIDE;';
+
+PRINT '';
+
+
 
 ------------------------------------------------------------
 -- SECTION 2: DATABASE-LEVEL SETTINGS

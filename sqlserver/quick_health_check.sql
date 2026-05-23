@@ -223,14 +223,27 @@ PRINT '';
 PRINT '------------------------------------------------------------';
 PRINT '10. ERROR LOG RECENT ERRORS';
 PRINT '------------------------------------------------------------';
+PRINT '';
 
 IF OBJECT_ID('tempdb..#ErrorLog') IS NOT NULL DROP TABLE #ErrorLog;
 CREATE TABLE #ErrorLog (LogDate DATETIME, ProcessInfo NVARCHAR(50), Text NVARCHAR(MAX));
-INSERT INTO #ErrorLog EXEC xp_readerrorlog 0, 1;
+
+-- fn_vw_error_log provides better access than xp_readerrorlog for recent errors
+SELECT TOP 10 INTO #ErrorLog WITH NOLOCK 
+    error_date AS LogDate,
+    process_info,
+    message AS Text
+FROM ::fn_vw_error_log;
+
+IF @@ROWCOUNT = 0
+BEGIN
+    PRINT 'Note: Error log query returned no results.';
+    SELECT TOP 10 DATEADD(SECOND, -1 * (24*3600), GETDATE()) AS LogDate, 'N/A' AS Text FROM sys.databases WHERE 1=0;
+END
 
 SELECT TOP 10
     LogDate,
-    Text AS Message
+    LEFT(Text, 80) AS Message
 FROM #ErrorLog
 WHERE Text LIKE '%Error%' OR Text LIKE '%Failed%' OR Text LIKE '%Severity%'
 ORDER BY LogDate DESC;

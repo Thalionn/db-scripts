@@ -342,8 +342,9 @@ PRINT '';
 -- =============================================
 -- SUMMARY
 -- =============================================
+DECLARE @HostName NVARCHAR(128) = @@SERVERNAME;
 PRINT '========================================';
-PRINT 'Verification Summary for: ' + @@SERVERNAME;
+PRINT 'Verification Summary for: ' + @HostName;
 PRINT '========================================';
 
 -- Database check
@@ -379,7 +380,7 @@ ELSE
 PRINT '';
 PRINT '========================================';
 PRINT 'To run on both servers:';
-PRINT '  sqlcmd -S SQL2022 -U zed -P "ZzCIBcUE9eB33n" -i sqlserver/test_dbatools_objects.sql';
-PRINT '  sqlcmd -S SQL2025 -U zed -P "ZzCIBcUE9eB33n" -i sqlserver/test_dbatools_objects.sql';
+PRINT '  sqlcmd -S <server1> -i sqlserver/test_dbatools_objects.sql';
+PRINT '  sqlcmd -S <server2> -i sqlserver/test_dbatools_objects.sql';
 PRINT '========================================';
 GO

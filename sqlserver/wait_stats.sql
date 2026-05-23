@@ -17,10 +17,8 @@ SELECT TOP 20
     CASE 
         WHEN wait_type LIKE 'PAGEIOLATCH%' THEN 'I/O'
         WHEN wait_type LIKE 'LCK_M%' THEN 'LOCKS'
-        WHEN wait_type LIKE 'PAGELATCH%' THEN 'LATCH'
-        WHEN wait_type LIKE 'ASYNC%' THEN 'NETWORK'
-        WHEN wait_type LIKE 'SOS%' THEN 'MEMORY'
-        WHEN wait_type = 'CXPACKET' THEN 'PARALLELISM'
+        WHEN wait_type = 'CXPACKET' OR wait_type = 'CXPOOL' THEN 'PARALLELISM'
+        WHEN wait_operation_desc IS NOT NULL THEN SUBSTRING(wait_type, 1, CHARINDEX('_', wait_type)) + '_OP'
         ELSE 'OTHER'
     END AS category
 FROM sys.dm_os_wait_stats
