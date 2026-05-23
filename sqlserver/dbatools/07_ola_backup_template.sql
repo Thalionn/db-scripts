@@ -6,10 +6,10 @@
 --          https://ola.hallengren.com
 -- ============================================================================
 
-USE master;
+USE msdb;
 GO
 
--- Create DatabaseMaintenance category if it doesn't exist (fixes missing category error)
+-- Create DatabaseMaintenance category if it doesn't exist
 IF NOT EXISTS (SELECT 1 FROM msdb.dbo.syscategories WHERE name = 'DatabaseMaintenance' AND category_class = 1)
 BEGIN
     EXEC msdb.dbo.sp_add_category
@@ -54,17 +54,14 @@ EXECUTE [dbo].[DatabaseBackup]
     @on_fail_action = 2;
 GO
 
--- Create DailyFullBackup schedule (daily at 10 PM, fixed invalid @freq_hour parameter)
-IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysschedules WHERE name = 'DailyFullBackup')
-BEGIN
-    EXEC msdb.dbo.sp_add_schedule
-        @schedule_name = 'DailyFullBackup',
-        @freq_type = 4,
-        @freq_interval = 1,
-        @freq_subday_type = 1,
-        @freq_subday_interval = 0,
-        @active_start_time = 220000;
-END
+-- Create DailyFullBackup schedule (daily at 10 PM)
+IF EXISTS (SELECT 1 FROM msdb.dbo.sysschedules WHERE name = 'DailyFullBackup')
+    EXEC msdb.dbo.sp_delete_schedule @schedule_name = 'DailyFullBackup';
+EXEC msdb.dbo.sp_add_schedule
+    @schedule_name = 'DailyFullBackup',
+    @freq_type = 4,
+    @freq_interval = 1,
+    @active_start_time = 220000;
 GO
 
 EXEC msdb.dbo.sp_attach_schedule
@@ -113,15 +110,14 @@ EXECUTE [dbo].[DatabaseBackup]
 GO
 
 -- Create LogBackupEvery15Min schedule (every 15 minutes)
-IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysschedules WHERE name = 'LogBackupEvery15Min')
-BEGIN
-    EXEC msdb.dbo.sp_add_schedule
-        @schedule_name = 'LogBackupEvery15Min',
-        @freq_type = 4,
-        @freq_interval = 1,
-        @freq_subday_type = 4,
-        @freq_subday_interval = 15;
-END
+IF EXISTS (SELECT 1 FROM msdb.dbo.sysschedules WHERE name = 'LogBackupEvery15Min')
+    EXEC msdb.dbo.sp_delete_schedule @schedule_name = 'LogBackupEvery15Min';
+EXEC msdb.dbo.sp_add_schedule
+    @schedule_name = 'LogBackupEvery15Min',
+    @freq_type = 4,
+    @freq_interval = 1,
+    @freq_subday_type = 4,
+    @freq_subday_interval = 15;
 GO
 
 EXEC msdb.dbo.sp_attach_schedule
@@ -166,15 +162,15 @@ EXECUTE [dbo].[DatabaseIntegrityCheck]
     @on_fail_action = 2;
 GO
 
--- Create WeeklyIntegrityCheck schedule (fixed duplicate @freq_type parameter)
-IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysschedules WHERE name = 'WeeklyIntegrityCheck')
-BEGIN
-    EXEC msdb.dbo.sp_add_schedule
-        @schedule_name = 'WeeklyIntegrityCheck',
-        @freq_type = 8,
-        @freq_interval = 64,
-        @freq_recurrence_factor = 1;
-END
+-- Create WeeklyIntegrityCheck schedule (Saturdays at midnight)
+IF EXISTS (SELECT 1 FROM msdb.dbo.sysschedules WHERE name = 'WeeklyIntegrityCheck')
+    EXEC msdb.dbo.sp_delete_schedule @schedule_name = 'WeeklyIntegrityCheck';
+EXEC msdb.dbo.sp_add_schedule
+    @schedule_name = 'WeeklyIntegrityCheck',
+    @freq_type = 8,
+    @freq_interval = 64,
+    @freq_recurrence_factor = 1,
+    @active_start_time = 0;
 GO
 
 EXEC msdb.dbo.sp_attach_schedule
