@@ -8,24 +8,6 @@
 USE msdb;
 GO
 
--- Clean up orphaned schedules after job deletions below
--- (Individual job deletions with @delete_unused_schedule = 1 handle most cleanup)
-DECLARE @sched_id INT;
-DECLARE sched_cursor CURSOR FOR
-SELECT s.schedule_id FROM msdb.dbo.sysschedules s
-WHERE s.name IN ('Every15Minutes_WaitStats','Every5Minutes_PerfCounters','Hourly_DatabaseSizes','DailyMidnight_PurgeOldData','Every30Minutes_QueryStats')
-  AND NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobschedules WHERE schedule_id = s.schedule_id);
-OPEN sched_cursor;
-FETCH NEXT FROM sched_cursor INTO @sched_id;
-WHILE @@FETCH_STATUS = 0
-BEGIN
-    EXEC msdb.dbo.sp_delete_schedule @schedule_id = @sched_id;
-    FETCH NEXT FROM sched_cursor INTO @sched_id;
-END
-CLOSE sched_cursor;
-DEALLOCATE sched_cursor;
-GO
-
 /* ====================================================== */
 -- Job: DBATools - Capture Wait Stats (every 15 minutes)
 /* ====================================================== */
@@ -57,6 +39,8 @@ EXEC msdb.dbo.sp_add_jobstep
 GO
 
 -- Schedule: Every 15 minutes
+IF EXISTS (SELECT 1 FROM msdb.dbo.sysschedules WHERE name = 'Every15Minutes_WaitStats')
+    EXEC msdb.dbo.sp_delete_schedule @schedule_name = 'Every15Minutes_WaitStats';
 EXEC msdb.dbo.sp_add_schedule
     @schedule_name = 'Every15Minutes_WaitStats',
     @freq_type = 4,
@@ -106,6 +90,8 @@ EXEC msdb.dbo.sp_add_jobstep
 GO
 
 -- Schedule: Every 5 minutes
+IF EXISTS (SELECT 1 FROM msdb.dbo.sysschedules WHERE name = 'Every5Minutes_PerfCounters')
+    EXEC msdb.dbo.sp_delete_schedule @schedule_name = 'Every5Minutes_PerfCounters';
 EXEC msdb.dbo.sp_add_schedule
     @schedule_name = 'Every5Minutes_PerfCounters',
     @freq_type = 4,
@@ -155,6 +141,8 @@ EXEC msdb.dbo.sp_add_jobstep
 GO
 
 -- Schedule: Hourly
+IF EXISTS (SELECT 1 FROM msdb.dbo.sysschedules WHERE name = 'Hourly_DatabaseSizes')
+    EXEC msdb.dbo.sp_delete_schedule @schedule_name = 'Hourly_DatabaseSizes';
 EXEC msdb.dbo.sp_add_schedule
     @schedule_name = 'Hourly_DatabaseSizes',
     @freq_type = 4,
@@ -204,12 +192,13 @@ EXEC msdb.dbo.sp_add_jobstep
 GO
 
 -- Schedule: Daily at midnight
+IF EXISTS (SELECT 1 FROM msdb.dbo.sysschedules WHERE name = 'DailyMidnight_PurgeOldData')
+    EXEC msdb.dbo.sp_delete_schedule @schedule_name = 'DailyMidnight_PurgeOldData';
 EXEC msdb.dbo.sp_add_schedule
     @schedule_name = 'DailyMidnight_PurgeOldData',
     @freq_type = 4,
     @freq_interval = 1,
-    @freq_subday_type = 1,
-    @freq_subday_interval = 0;
+    @active_start_time = 0;
 GO
 
 EXEC msdb.dbo.sp_attach_schedule
@@ -253,6 +242,8 @@ EXEC msdb.dbo.sp_add_jobstep
 GO
 
 -- Schedule: Every 30 minutes
+IF EXISTS (SELECT 1 FROM msdb.dbo.sysschedules WHERE name = 'Every30Minutes_QueryStats')
+    EXEC msdb.dbo.sp_delete_schedule @schedule_name = 'Every30Minutes_QueryStats';
 EXEC msdb.dbo.sp_add_schedule
     @schedule_name = 'Every30Minutes_QueryStats',
     @freq_type = 4,
@@ -277,23 +268,6 @@ GO
 
 IF NOT EXISTS (SELECT name FROM msdb.dbo.syscategories WHERE name = 'DBATools' AND category_class = 1)
     EXEC msdb.dbo.sp_add_category @class = 'JOB', @type = 'LOCAL', @name = 'DBATools';
-GO
-
--- Clean up orphaned schedules that weren't removed by job deletions
-DECLARE @sched_id INT;
-DECLARE sched_cursor CURSOR FOR
-SELECT s.schedule_id FROM msdb.dbo.sysschedules s
-WHERE s.name IN ('Every15Minutes_WaitStats','Every5Minutes_PerfCounters','Hourly_DatabaseSizes','DailyMidnight_PurgeOldData','Every30Minutes_QueryStats')
-  AND NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobschedules WHERE schedule_id = s.schedule_id);
-OPEN sched_cursor;
-FETCH NEXT FROM sched_cursor INTO @sched_id;
-WHILE @@FETCH_STATUS = 0
-BEGIN
-    EXEC msdb.dbo.sp_delete_schedule @schedule_id = @sched_id;
-    FETCH NEXT FROM sched_cursor INTO @sched_id;
-END
-CLOSE sched_cursor;
-DEALLOCATE sched_cursor;
 GO
 
 PRINT 'Agent jobs created successfully.';
