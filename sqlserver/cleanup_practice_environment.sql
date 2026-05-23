@@ -19,52 +19,13 @@ PRINT 'Step 1: Drop Databases';
 PRINT '========================================';
 PRINT '';
 
--- Delete any jobs that might reference dropped databases first
-DECLARE @job_name NVARCHAR(128);
-DECLARE @sql_drop_job NVARCHAR(MAX);
-
-DECLARE job_cursor CURSOR FOR
-SELECT name FROM msdb.dbo.sysjobs
-WHERE name LIKE 'SalesApp_%' OR 
-      name LIKE 'WarehouseApp_%' OR 
-      name LIKE 'CSApp_%' OR 
-      name LIKE 'ExecutiveApp_%' OR 
-      name LIKE 'HRApp_%' OR 
-      name LIKE 'Practice_%' OR 
-      name LIKE 'DBATools - Deploy Practice Environment'
-ORDER BY name;
-
-OPEN job_cursor;
-FETCH NEXT FROM job_cursor INTO @job_name;
-
-WHILE @@FETCH_STATUS = 0
-BEGIN
-    BEGIN TRY
-        IF EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = @job_name)
-        BEGIN
-            DECLARE @sql_del NVARCHAR(256) = 'EXEC msdb.dbo.sp_delete_job @job_name = ''' + @job_name + ''', @delete_unused_schedule = 1;';
-            EXEC (@sql_del);
-            INSERT INTO @DroppedObjects (ObjectName, ObjectType) VALUES (''@job_name'', 'JScheduler'')
-            PRINT '  Dropped job: ''' + @job_name + '''';
-        END
-    END TRY
-    BEGIN CATCH
-        PRINT '  Error dropping job ''' + @job_name + ''': ''' + ERROR_MESSAGE() + '''';
-    END CATCH
-    FETCH NEXT FROM job_cursor INTO @job_name;
-END
-
-CLOSE job_cursor;
-DEALLOCATE job_cursor
-GO
-
 -- Drop PracticeDB database
 IF DB_ID('PracticeDB') IS NOT NULL
 BEGIN  
     PRINT '  Dropping database: PracticeDB...';
     ALTER DATABASE PracticeDB SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
     DROP DATABASE PracticeDB;
-    INSERT INTO @DroppedObjects (ObjectName, ObjectType) VALUES ('PracticeDB', 'DATABASE'');
+    INSERT INTO @DroppedObjects (ObjectName, ObjectType) VALUES ('PracticeDB', 'DATABASE');
     PRINT '  Dropped database: PracticeDB';
 END
 ELSE
@@ -78,7 +39,7 @@ BEGIN
     PRINT '  Dropping database: DBATools...';
     ALTER DATABASE DBATools SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
     DROP DATABASE DBATools;
-    INSERT INTO @DroppedObjects (ObjectName, ObjectType) VALUES ('DBATools', 'DATABASE'');
+    INSERT INTO @DroppedObjects (ObjectName, ObjectType) VALUES ('DBATools', 'DATABASE');
     PRINT '  Dropped database: DBATools';
 END
 ELSE
@@ -123,7 +84,7 @@ BEGIN
             EXEC msdb.dbo.sp_delete_job 
                 @job_name = @job_name, 
                 @delete_unused_schedule = 1;
-            INSERT INTO @DroppedObjects (ObjectName, ObjectType) VALUES ('@job_name', 'JOBSCHULER'');
+            INSERT INTO @DroppedObjects (ObjectName, ObjectType) VALUES (@job_name, 'SCHEDULER');
             PRINT '  Dropped job: ''' + @job_name + '''';
         END
     END TRY
@@ -264,20 +225,6 @@ END
 PRINT '';
 
 -- ============================================================================
--- Drop Categories Related to Practice Environment
--- ============================================================================
-USE msdb;
-GO
-
-IF EXISTS (SELECT 1 FROM msdb.dbo.syscategories WHERE name = 'DatabaseMaintenance' AND category_class = 1)
-BEGIN
-    EXEC msdb.dbo.sp_delete_category @class = 'JOB', @name = 'DatabaseMaintenance';
-    PRINT '  Dropped category: DatabaseMaintenance';
-END
-
-PRINT '';
-
--- ============================================================================
 -- Drop First Responder Kit Procedures (if they exist in master and were deployed)
 -- ============================================================================
 USE master;  
@@ -305,7 +252,8 @@ BEGIN
     BEGIN TRY
         IF EXISTS (SELECT 1 FROM sys.procedures WHERE name = @proc_name AND schema_id = SCHEMA_ID('dbo'))
         BEGIN
-            DROP PROCEDURE dbo.[@proc_name];
+            DECLARE @drop_sql NVARCHAR(256) = 'DROP PROCEDURE dbo.' + @proc_name;
+            EXEC(@drop_sql);
             PRINT '  Dropped procedure: ''' + @proc_name + '''';
             SET @proc_count = @proc_count + 1;
         END
@@ -320,8 +268,6 @@ DEALLOCATE proc_cursor
 
 IF @proc_count = 0
     PRINT '  No FRK procedures found to drop.';
-
-DROP TABLE IF EXISTS exists(SELECT * FROM sys.tables WHERE name = '#DroppedObjects') #DroppedObjects;
 
 PRINT '';
 PRINT '========================================';  
