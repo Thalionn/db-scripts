@@ -2,6 +2,12 @@
 
 Scripts tested on SQL Server 2016 through 2022.
 
+## Utility Functions
+
+| Script | Description |
+|--------|-------------|
+| `helper_functions.sql` | Common utility functions for all diagnostic scripts (run once) |
+
 ## Sessions & Blocking
 
 | Script | Description |
@@ -60,3 +66,36 @@ SELECT * FROM msdb.dbo.sysjobs;
 ```bash
 sqlcmd -S localhost -E -i active_sessions.sql
 ```
+
+## Usage Notes (Standalone Scripts)
+
+### Order of Deployment (Recommended)
+1. **helper_functions.sql** - Creates utility functions for cleaner script design
+2. Any standalone diagnostic script at any time (they are independent)
+
+### For Monitoring Needs
+- `tempdb_contention.sql` - Add to your monitoring routine; run weekly
+- `quick_health_check.sql` - Good starting point; include in daily health reports
+- `job_history.sql` - Check nightly job completion status
+
+### Permissions Required
+All standalone scripts are read-only. You need:
+- **VIEW SERVER STATE** (for DMVs like sys.dm_os_wait_stats)
+- **VIEW DEFINITION** (for some schema queries)
+- Access to msdb for job-related queries
+
+## Standalone Diagnostic Scripts Reference
+
+| Script | Purpose | Best Used For |
+|--------|---------|---------------|
+| `quick_health_check.sql` | All-in-one health overview | Daily/weekly health checks |
+| `blocking_chains.sql` | Visualize blocking issues | Incident response (during incidents) |
+| `active_sessions.sql` | See what's running now | Performance troubleshooting |
+| `tempdb_contention.sql` | Analyze TempDB usage | Capacity planning, optimization |
+| `wait_stats.sql` | Identify wait bottlenecks | Performance tuning |
+| `index_fragmentation.sql` | Identify defragmentation needs | Maintenance scheduling |
+| `database_size.sql` | Space utilization report | Capacity planning |
+| `job_history.sql` | Recent job execution status | Automation verification |
+| `autogrowth_events.sql` | Track autogrowth patterns (TF1233) | Disk capacity analysis |
+
+---
