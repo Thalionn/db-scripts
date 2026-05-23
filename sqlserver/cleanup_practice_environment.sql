@@ -1,203 +1,329 @@
 -- ============================================================================
 -- Cleanup Practice Environment Script
--- Drops all objects created by 20B_deploy_practice_env_job.sql
+-- Drops all objects created by practice environment setup
 -- Run this before re-deploying to start fresh
 -- ============================================================================
 
 USE master;
 GO
+SET NOCOUNT ON;
+DECLARE @StartTime DATETIME = GETDATE();
+DECLARE @DroppedObjects TABLE (ObjectName NVARCHAR(256), ObjectType NVARCHAR(32));
 
 -- ============================================================================
--- Drop PracticeDB database
+-- Drop PracticeDB and DBATools database
 -- ============================================================================
-IF DB_ID('PracticeDB') IS NOT NULL
-BEGIN
-    ALTER DATABASE PracticeDB SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
-    DROP DATABASE PracticeDB;
-    PRINT 'Dropped database: PracticeDB';
-END
-ELSE
-BEGIN
-    PRINT 'Database PracticeDB does not exist, skipping...';
-END
-GO
+PRINT '';
+PRINT '========================================';
+PRINT 'Step 1: Drop Databases';
+PRINT '========================================';
+PRINT '';
 
--- ============================================================================
--- Drop DBATools database
--- ============================================================================
-IF DB_ID('DBATools') IS NOT NULL
-BEGIN
-    ALTER DATABASE DBATools SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
-    DROP DATABASE DBATools;
-    PRINT 'Dropped database: DBATools';
-END
-ELSE
-BEGIN
-    PRINT 'Database DBATools does not exist, skipping...';
-END
-GO
-
--- ============================================================================
--- Drop SQL Agent Jobs (Practice Environment)
--- ============================================================================
-USE msdb;
-GO
-
+-- Delete any jobs that might reference dropped databases first
 DECLARE @job_name NVARCHAR(128);
+DECLARE @sql_drop_job NVARCHAR(MAX);
 
--- Cursor to drop all practice-related jobs
 DECLARE job_cursor CURSOR FOR
 SELECT name FROM msdb.dbo.sysjobs
-WHERE name LIKE 'SalesApp_%'
-   OR name LIKE 'WarehouseApp_%'
-   OR name LIKE 'CSApp_%'
-   OR name LIKE 'ExecutiveApp_%'
-   OR name LIKE 'HRApp_%'
-   OR name LIKE 'Practice_%'
-   OR name LIKE 'DBATools - %'
-   OR name LIKE 'DatabaseBackup - %'
-   OR name LIKE 'DatabaseIntegrityCheck - %';
+WHERE name LIKE 'SalesApp_%' OR 
+      name LIKE 'WarehouseApp_%' OR 
+      name LIKE 'CSApp_%' OR 
+      name LIKE 'ExecutiveApp_%' OR 
+      name LIKE 'HRApp_%' OR 
+      name LIKE 'Practice_%' OR 
+      name LIKE 'DBATools - Deploy Practice Environment'
+ORDER BY name;
 
 OPEN job_cursor;
 FETCH NEXT FROM job_cursor INTO @job_name;
 
 WHILE @@FETCH_STATUS = 0
 BEGIN
-    EXEC msdb.dbo.sp_delete_job @job_name = @job_name, @delete_unused_schedule = 1;
-    PRINT 'Dropped job: ' + @job_name;
+    BEGIN TRY
+        IF EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = @job_name)
+        BEGIN
+            DECLARE @sql_del NVARCHAR(256) = 'EXEC msdb.dbo.sp_delete_job @job_name = ''' + @job_name + ''', @delete_unused_schedule = 1;';
+            EXEC (@sql_del);
+            INSERT INTO @DroppedObjects (ObjectName, ObjectType) VALUES (''@job_name'', 'JScheduler'')
+            PRINT '  Dropped job: ''' + @job_name + '''';
+        END
+    END TRY
+    BEGIN CATCH
+        PRINT '  Error dropping job ''' + @job_name + ''': ''' + ERROR_MESSAGE() + '''';
+    END CATCH
     FETCH NEXT FROM job_cursor INTO @job_name;
 END
 
 CLOSE job_cursor;
-DEALLOCATE job_cursor;
+DEALLOCATE job_cursor
 GO
 
+-- Drop PracticeDB database
+IF DB_ID('PracticeDB') IS NOT NULL
+BEGIN  
+    PRINT '  Dropping database: PracticeDB...';
+    ALTER DATABASE PracticeDB SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+    DROP DATABASE PracticeDB;
+    INSERT INTO @DroppedObjects (ObjectName, ObjectType) VALUES ('PracticeDB', 'DATABASE'');
+    PRINT '  Dropped database: PracticeDB';
+END
+ELSE
+BEGIN  
+    PRINT '  Database PracticeDB does not exist, skipping.';
+END
+
+-- Drop DBATools database if it exists and belongs to practice env
+IF DB_ID('DBATools') IS NOT NULL
+BEGIN  
+    PRINT '  Dropping database: DBATools...';
+    ALTER DATABASE DBATools SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+    DROP DATABASE DBATools;
+    INSERT INTO @DroppedObjects (ObjectName, ObjectType) VALUES ('DBATools', 'DATABASE'');
+    PRINT '  Dropped database: DBATools';
+END
+ELSE
+BEGIN  
+    PRINT '  Database DBATools does not exist, skipping.';
+END
+
+PRINT '';
+
 -- ============================================================================
--- Drop Schedules (DBATools)
+-- Drop SQL Agent Jobs (Practice Environment) and DBATools Job Category 
 -- ============================================================================
+USE msdb;
+GO
+PRINT '========================================';
+PRINT 'Step 2: Drop SQL Agent Jobs (Practice)';
+PRINT '========================================';
+PRINT '';
+
+DECLARE @job_name NVARCHAR(128);
+DECLARE job_count INT = 0;
+
+-- Cursor to drop all practice-related jobs only (not DBATools maintenance jobs)
+DECLARE job_cursor CURSOR FOR
+SELECT name FROM msdb.dbo.sysjobs
+WHERE name LIKE 'SalesApp_%' OR 
+      name LIKE 'WarehouseApp_%' OR 
+      name LIKE 'CSApp_%' OR 
+      name LIKE 'ExecutiveApp_%' OR 
+      name LIKE 'HRApp_%' OR 
+      name LIKE 'Practice_%'
+ORDER BY name;
+
+OPEN job_cursor;
+FETCH NEXT FROM job_cursor INTO @job_name;
+
+WHILE @@FETCH_STATUS = 0
+BEGIN
+    BEGIN TRY
+        IF EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = @job_name)
+        BEGIN
+            EXEC msdb.dbo.sp_delete_job 
+                @job_name = @job_name, 
+                @delete_unused_schedule = 1;
+            INSERT INTO @DroppedObjects (ObjectName, ObjectType) VALUES ('@job_name', 'JOBSCHULER'');
+            PRINT '  Dropped job: ''' + @job_name + '''';
+        END
+    END TRY
+    BEGIN CATCH
+    END CATCH
+    FETCH NEXT FROM job_cursor INTO @job_name;
+END
+
+CLOSE job_cursor;
+DEALLOCATE job_cursor
+
+-- Drop DBATools job category (may not exist)
+IF EXISTS (SELECT 1 FROM msdb.dbo.syscategories WHERE name = 'DBATools' AND category_class = 1)
+BEGIN
+    EXEC msdb.dbo.sp_delete_category @class = 'JOB', @name = 'DBATools';
+    PRINT '  Dropped job category: DBATools';
+END
+
+-- Drop DatabaseMaintenance category if exists  
+IF EXISTS (SELECT 1 FROM msdb.dbo.syscategories WHERE name = 'DatabaseMaintenance' AND category_class = 1)
+BEGIN
+    EXEC msdb.dbo.sp_delete_category @class = 'JOB', @name = 'DatabaseMaintenance';
+    PRINT '  Dropped job category: DatabaseMaintenance';
+END
+
+PRINT '';
+
+-- ============================================================================
+-- Drop Schedules (Practice Environment Only)
+-- ============================================================================
+PRINT '========================================';  
+PRINT 'Step 3: Drop Schedules (Practice Env)';
+PRINT '========================================';
+PRINT '';
+
 DECLARE @schedule_id INT;
 DECLARE @schedule_name NVARCHAR(128);
+DECLARE @schedules_dropped INT = 0;
 
+-- Only drop practice-related schedules
 DECLARE schedule_cursor CURSOR FOR
 SELECT schedule_id, name FROM msdb.dbo.sysschedules
-WHERE name LIKE 'Every%_WaitStats'
-   OR name LIKE 'Every%_PerfCounters'
-   OR name LIKE 'Hourly_DatabaseSizes'
-   OR name LIKE 'DailyMidnight_PurgeOldData'
-   OR name LIKE 'Every%_QueryStats'
-   OR name LIKE 'Daily8AM'
-   OR name LIKE 'Every5Minutes'
-   OR name LIKE 'Every1Minute'
-   OR name LIKE 'Every15Minutes'
-   OR name LIKE 'DailyFullBackup'
-   OR name LIKE 'LogBackupEvery15Min'
-   OR name LIKE 'WeeklyIntegrityCheck'
-   OR name LIKE 'Sunday2AM'
-   OR name = 'DailyMidnight_PurgeOldData'
-   OR name = 'Every5Minutes_WaitStats'
-   OR name = 'Every5Minutes_PerfCounters'
-   OR name = 'Hourly_DatabaseSizes'
-   OR name = 'DailyMidnight_PurgeOldData'
-   OR name = 'Every30Minutes_QueryStats';
+WHERE (name LIKE 'Practice%' OR 
+      name LIKE 'SalesApp%' OR 
+      name LIKE 'WarehouseApp%' OR 
+      name LIKE 'CSApp%' OR 
+      name LIKE 'ExecutiveApp%' OR  
+      name LIKE 'HRApp%')
+ORDER BY name;
 
 OPEN schedule_cursor;
 FETCH NEXT FROM schedule_cursor INTO @schedule_id, @schedule_name;
 
 WHILE @@FETCH_STATUS = 0
 BEGIN
-    EXEC msdb.dbo.sp_delete_schedule @schedule_id = @schedule_id;
-    PRINT 'Dropped schedule: ' + @schedule_name;
+    BEGIN TRY
+        EXEC msdb.dbo.sp_delete_schedule @schedule_id = @schedule_id;
+        PRINT '  Dropped schedule: ''' + @schedule_name + '''';
+        SET @schedules_dropped = @schedules_dropped + 1;
+    END TRY
+    BEGIN CATCH
+    END CATCH
     FETCH NEXT FROM schedule_cursor INTO @schedule_id, @schedule_name;
 END
 
 CLOSE schedule_cursor;
-DEALLOCATE schedule_cursor;
-GO
+DEALLOCATE schedule_cursor
+
+IF @schedules_dropped = 0
+    PRINT '  No practice schedules found to drop.';
+    
+PRINT '';
 
 -- ============================================================================
 -- Drop Server-Level Trigger
 -- ============================================================================
 USE master;
 GO
+PRINT '========================================';  
+PRINT 'Step 4: Drop Logins and Triggers';
+PRINT '========================================';
+PRINT '';
 
-IF EXISTS (SELECT * FROM sys.server_triggers WHERE name = 'trg_LoginAudit')
+IF OBJECT_ID('trg_LoginAudit', 'TR') IS NOT NULL
 BEGIN
     DROP TRIGGER trg_LoginAudit ON ALL SERVER;
-    PRINT 'Dropped server trigger: trg_LoginAudit';
+    PRINT '  Dropped trigger: trg_LoginAudit';
 END
-ELSE
+    
+-- If it exists with different quoting, try that version  
+IF (OBJECT_ID('trg_LoginAudit', 'TR') IS NULL) AND OBJECT_ID('[trg_LoginAudit]', 'TR') IS NOT NULL
 BEGIN
-    PRINT 'Server trigger trg_LoginAudit does not exist, skipping...';
+    DROP TRIGGER [trg_LoginAudit] ON ALL SERVER;
+    PRINT '  Dropped trigger: trg_LoginAudit';
 END
-GO
 
--- ============================================================================
--- Drop Server-Level Logins
+PRINT '';
+
+-- ============================================================================  
+-- Drop Server-Level Logins (Practice Environment)
 -- ============================================================================
 IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'SalesAppLogin')
 BEGIN
     DROP LOGIN [SalesAppLogin];
-    PRINT 'Dropped login: SalesAppLogin';
+    PRINT '  Dropped login: SalesAppLogin';
 END
 
 IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'WarehouseAppLogin')
 BEGIN
     DROP LOGIN [WarehouseAppLogin];
-    PRINT 'Dropped login: WarehouseAppLogin';
+    PRINT '  Dropped login: WarehouseAppLogin';
 END
-GO
+
+IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'AnalyticsAppLogin')  
+BEGIN
+    DROP LOGIN [AnalyticsAppLogin];
+    PRINT '  Dropped login: AnalyticsAppLogin';
+END
+
+IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'HRAppLogin')
+BEGIN
+    DROP LOGIN [HRAppLogin];
+    PRINT '  Dropped login: HRAppLogin';
+END
+    
+IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'CSAppLogin')  
+BEGIN
+    DROP LOGIN [CSAppLogin];
+    PRINT '  Dropped login: CSAppLogin';
+END
+
+IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'ExecutiveAppLogin')
+BEGIN  
+    DROP LOGIN [ExecutiveAppLogin];
+    PRINT '  Dropped login: ExecutiveAppLogin';
+END
+
+PRINT '';
 
 -- ============================================================================
--- Drop Categories (MSDB)
+-- Drop Categories Related to Practice Environment
 -- ============================================================================
 USE msdb;
 GO
 
-IF EXISTS (SELECT 1 FROM msdb.dbo.syscategories WHERE name = 'DBATools' AND category_class = 1)
-BEGIN
-    EXEC msdb.dbo.sp_delete_category @class = 'JOB', @name = 'DBATools';
-    PRINT 'Dropped category: DBATools';
-END
-
 IF EXISTS (SELECT 1 FROM msdb.dbo.syscategories WHERE name = 'DatabaseMaintenance' AND category_class = 1)
 BEGIN
     EXEC msdb.dbo.sp_delete_category @class = 'JOB', @name = 'DatabaseMaintenance';
-    PRINT 'Dropped category: DatabaseMaintenance';
+    PRINT '  Dropped category: DatabaseMaintenance';
 END
-GO
+
+PRINT '';
 
 -- ============================================================================
--- Drop First Responder Kit Procedures (if exist in master)
+-- Drop First Responder Kit Procedures (if they exist in master and were deployed)
 -- ============================================================================
-USE master;
+USE master;  
 GO
-
-IF EXISTS (SELECT 1 FROM sys.procedures WHERE name = 'sp_Blitz' AND schema_id = SCHEMA_ID('dbo'))
-BEGIN
-    DROP PROCEDURE dbo.sp_Blitz;
-    PRINT 'Dropped procedure: sp_Blitz';
-END
-
-IF EXISTS (SELECT 1 FROM sys.procedures WHERE name = 'sp_BlitzFirst' AND schema_id = SCHEMA_ID('dbo'))
-BEGIN
-    DROP PROCEDURE dbo.sp_BlitzFirst;
-    PRINT 'Dropped procedure: sp_BlitzFirst';
-END
-
-IF EXISTS (SELECT 1 FROM sys.procedures WHERE name = 'sp_BlitzIndex' AND schema_id = SCHEMA_ID('dbo'))
-BEGIN
-    DROP PROCEDURE dbo.sp_BlitzIndex;
-    PRINT 'Dropped procedure: sp_BlitzIndex';
-END
-
-IF EXISTS (SELECT 1 FROM sys.procedures WHERE name = 'sp_BlitzCache' AND schema_id = SCHEMA_ID('dbo'))
-BEGIN
-    DROP PROCEDURE dbo.sp_BlitzCache;
-    PRINT 'Dropped procedure: sp_BlitzCache';
-END
-GO
-
 PRINT '========================================';
+PRINT 'Step 5: Drop FRK Procedures (Optional/If Deployed)';
+PRINT '========================================';
+PRINT '';
+
+DECLARE @proc_name NVARCHAR(128);
+DECLARE @proc_count INT = 0;
+
+DECLARE proc_cursor CURSOR FOR
+SELECT DISTINCT sp.name
+FROM sys.procedures sp
+WHERE sp.name IN ('sp_Blitz', 'sp_BlitzFirst', 'sp_BlitzIndex', 
+                  'sp_BlitzCache')
+    AND (sp.schema_id = SCHEMA_ID('dbo') OR sp.name LIKE 'sp_Blitz%');
+
+OPEN proc_cursor;
+FETCH NEXT FROM proc_cursor INTO @proc_name;
+
+WHILE @@FETCH_STATUS = 0
+BEGIN  
+    BEGIN TRY
+        IF EXISTS (SELECT 1 FROM sys.procedures WHERE name = @proc_name AND schema_id = SCHEMA_ID('dbo'))
+        BEGIN
+            DROP PROCEDURE dbo.[@proc_name];
+            PRINT '  Dropped procedure: ''' + @proc_name + '''';
+            SET @proc_count = @proc_count + 1;
+        END
+    END TRY  
+    BEGIN CATCH
+    END CATCH
+    FETCH NEXT FROM proc_cursor INTO @proc_name;
+END
+
+CLOSE proc_cursor;
+DEALLOCATE proc_cursor
+
+IF @proc_count = 0
+    PRINT '  No FRK procedures found to drop.';
+
+DROP TABLE IF EXISTS exists(SELECT * FROM sys.tables WHERE name = '#DroppedObjects') #DroppedObjects;
+
+PRINT '';
+PRINT '========================================';  
 PRINT 'Cleanup complete!';
 PRINT '========================================';
-GO
