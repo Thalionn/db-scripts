@@ -60,7 +60,7 @@ PRINT '========================================';
 PRINT '';
 
 DECLARE @job_name NVARCHAR(128);
-DECLARE job_count INT = 0;
+DECLARE @job_count INT = 0;
 
 -- Cursor to drop all practice-related jobs only (not DBATools maintenance jobs)
 DECLARE job_cursor CURSOR FOR

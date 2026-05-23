@@ -29,28 +29,30 @@ GO
 
 PRINT 'Creating logins and users...';
 
+DECLARE @PracticePassword NVARCHAR(128) = N'Practice123!';
+
 IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'SalesAppLogin')
-    CREATE LOGIN [SalesAppLogin] WITH PASSWORD = N'Practice123!';
+    CREATE LOGIN [SalesAppLogin] WITH PASSWORD = @PracticePassword;
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'WarehouseAppLogin')
-    CREATE LOGIN [WarehouseAppLogin] WITH PASSWORD = N'Practice123!';
+    CREATE LOGIN [WarehouseAppLogin] WITH PASSWORD = @PracticePassword;
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'AnalyticsAppLogin')
-    CREATE LOGIN [AnalyticsAppLogin] WITH PASSWORD = N'Practice123!';
+    CREATE LOGIN [AnalyticsAppLogin] WITH PASSWORD = @PracticePassword;
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'HRAppLogin')
-    CREATE LOGIN [HRAppLogin] WITH PASSWORD = N'Practice123!';
+    CREATE LOGIN [HRAppLogin] WITH PASSWORD = @PracticePassword;
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'CSAppLogin')
-    CREATE LOGIN [CSAppLogin] WITH PASSWORD = N'Practice123!';
+    CREATE LOGIN [CSAppLogin] WITH PASSWORD = @PracticePassword;
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'ExecutiveAppLogin')
-    CREATE LOGIN [ExecutiveAppLogin] WITH PASSWORD = N'Practice123!';
+    CREATE LOGIN [ExecutiveAppLogin] WITH PASSWORD = @PracticePassword;
 GO
 
 -- Create schemas

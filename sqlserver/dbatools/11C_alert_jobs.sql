@@ -16,8 +16,6 @@ BEGIN
         @schedule_name = 'Daily8AM',
         @freq_type = 4,
         @freq_interval = 1,
-        @freq_subday_type = 1,
-        @freq_subday_interval = 0,
         @active_start_time = 080000;
 END
 GO

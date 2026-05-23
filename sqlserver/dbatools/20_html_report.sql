@@ -112,7 +112,6 @@ BEGIN
                     </thead>
                     <tbody>';
 
-    -- Fix: Replace non-existent physical_size with size from sys.master_files
     SELECT @HTML = @HTML + N'
                         <tr>
                             <td>' + d.name + '</td>
@@ -216,7 +215,6 @@ BEGIN
                     </thead>
                     <tbody>';
 
-    -- Fix: Replace waiting_task_count with waiting_tasks_count
     SELECT @HTML = @HTML + N'
                         <tr>
                             <td>' + wait_type + '</td>
@@ -288,7 +286,6 @@ BEGIN
             EXEC(@CreateTableSQL);
         END
 
-        -- Fix: Ensure correct parameter separator and syntax for INSERT
         SET @InsertSQL = N'INSERT INTO ' + QUOTENAME(@OutputDatabaseName) + N'.dba.' + QUOTENAME(@OutputTableName) + N' (ServerName, ReportDate, HTMLReport) VALUES (@SrvName, GETDATE(), @HTMLContent)';
 
         EXEC sp_executesql

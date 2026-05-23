@@ -18,7 +18,10 @@ GO
 
 -- Check that procedure exists before adding job step
 IF OBJECT_ID(N'[DBATools].[dba].[CaptureWaitStats]') IS NULL
+BEGIN
     RAISERROR('Procedure DBATools.dba.CaptureWaitStats does not exist. Please create it first.', 16, 1);
+    RETURN;
+END
 GO
 
 EXEC msdb.dbo.sp_add_job
@@ -69,7 +72,10 @@ GO
 
 -- Check that procedure exists before adding job step
 IF OBJECT_ID(N'[DBATools].[dba].[CapturePerfCounters]') IS NULL
+BEGIN
     RAISERROR('Procedure DBATools.dba.CapturePerfCounters does not exist. Please create it first.', 16, 1);
+    RETURN;
+END
 GO
 
 EXEC msdb.dbo.sp_add_job
@@ -120,7 +126,10 @@ GO
 
 -- Check that procedure exists before adding job step
 IF OBJECT_ID(N'[DBATools].[dba].[CaptureDatabaseSizes]') IS NULL
+BEGIN
     RAISERROR('Procedure DBATools.dba.CaptureDatabaseSizes does not exist. Please create it first.', 16, 1);
+    RETURN;
+END
 GO
 
 EXEC msdb.dbo.sp_add_job
@@ -171,7 +180,10 @@ GO
 
 -- Check that procedure exists before adding job step
 IF OBJECT_ID(N'[DBATools].[dba].[PurgeOldData]') IS NULL
+BEGIN
     RAISERROR('Procedure DBATools.dba.PurgeOldData does not exist. Please create it first.', 16, 1);
+    RETURN;
+END
 GO
 
 EXEC msdb.dbo.sp_add_job
@@ -221,7 +233,10 @@ GO
 
 -- Check that procedure exists before adding job step
 IF OBJECT_ID(N'[DBATools].[dba].[CaptureQueryStats]') IS NULL
+BEGIN
     RAISERROR('Procedure DBATools.dba.CaptureQueryStats does not exist. Please create it first.', 16, 1);
+    RETURN;
+END
 GO
 
 EXEC msdb.dbo.sp_add_job

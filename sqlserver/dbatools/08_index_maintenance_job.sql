@@ -58,8 +58,9 @@ GO
 EXEC msdb.dbo.sp_add_schedule
     @schedule_name = 'Sunday2AM',
     @freq_type = 8,
-    @freq_interval = 64,
-    @freq_recurrence_factor = 1;
+    @freq_interval = 1,
+    @freq_recurrence_factor = 1,
+    @active_start_time = 20000;
 
 EXEC msdb.dbo.sp_attach_schedule
     @job_name = 'DBATools - Index Maintenance',

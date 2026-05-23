@@ -11,39 +11,7 @@ IF EXISTS (SELECT job_id FROM msdb.dbo.sysjobs WHERE name = 'DBATools - Deploy P
     EXEC msdb.dbo.sp_delete_job @job_name = 'DBATools - Deploy Practice Environment', @delete_unused_schedule = 1;
 GO
 
--- Create job step without GO in between (causes parse error)
-EXEC msdb.dbo.sp_add_job_step 
-    @job_name = N'SalesApp_Daily_Report',
-    @step_name = N'Generate Sales Summary',
-    @subsystem = N'TSQL',
-    @database_name = N'PracticeDB',
-    @command = N'-- Create daily sales summary table
-IF OBJECT_ID(''dbo.SalesApp_Daily_SalesSummary'', ''U'') IS NOT NULL
-DROP TABLE dbo.SalesApp_Daily_SalesSummary;
-
-CREATE TABLE dbo.SalesApp_Daily_SalesSummary (
-    ReportDate DATE PRIMARY KEY,
-    TotalSales DECIMAL(18,2),
-    OrderCount INT,
-    UniqueCustomers INT,
-    TopProduct NVARCHAR(50)
-);
-
-INSERT INTO dbo.SalesApp_Daily_SalesSummary (ReportDate, TotalSales, OrderCount, UniqueCustomers, TopProduct)
-SELECT 
-    CAST(GETDATE() AS DATE) AS ReportDate,
-    SUM(TotalAmount) AS TotalSales,
-    COUNT(*) AS OrderCount,
-    COUNT(DISTINCT CustomerID) AS UniqueCustomers,
-    (SELECT TOP 1 p.ProductName
-     FROM Sales.OrderDetails od
-     JOIN Sales.Products p ON od.ProductID = p.ProductID
-     GROUP BY p.ProductName
-     ORDER BY SUM(od.Quantity * od.UnitPrice) DESC) AS TopProduct
-FROM Sales.Orders
-WHERE CAST(OrderDate AS DATE) = CAST(GETDATE() AS DATE);
-
-SELECT * FROM dbo.SalesApp_Daily_SalesSummary';
+EXEC msdb.dbo.sp_add_jobstep
     @job_name = 'DBATools - Deploy Practice Environment',
     @step_name = 'Create Deployment Log Table',
     @subsystem = 'TSQL',

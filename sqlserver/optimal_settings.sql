@@ -1,274 +1,176 @@
--- ============================================================================  
+-- ============================================================================
 -- Script: optimal_settings.sql
--- Purpose: Apply SQL Server best practice settings for performance and reliability
--- Usage:   Run in stages or review first; some changes require restart
--- Notes:   Review recommended values before running on production!
+-- Purpose: Display and recommend SQL Server best practice settings
+-- Usage:   Review output before making changes; some require restart
+-- Notes:   READ-ONLY — this script only prints recommendations, it does
+--          not apply any settings automatically.
 -- ============================================================================
 
 SET NOCOUNT ON;
 
-PRINT '';
-PRINT '========================================';  
-PRINT 'SQL Server Optimal Configuration Script';
-PRINT 'Based on industry best practices'
-PRINT '========================================';
+PRINT REPLICATE('=', 60);
+PRINT 'SQL Server Optimal Configuration Review';
+PRINT 'Server: ' + @@SERVERNAME;
+PRINT 'Time: ' + CONVERT(VARCHAR, GETDATE(), 120);
+PRINT REPLICATE('=', 60);
 PRINT '';
 
 -- ============================================================================
 -- SECTION 0: Preflight Checks
 -- ============================================================================
-PRINT '';
 PRINT '--- SECTION 0: Preflight Checks ---';
 PRINT '';
 
-DECLARE @ServerEdition VARCHAR(50);
-DECLARE @EditionLevel INT;  
-DECLARE @TotalRAM MB = 0; 
-DECLARE @DatabaseCount INT;
+DECLARE @ServerEdition       NVARCHAR(100) = CAST(SERVERPROPERTY('EDITION') AS NVARCHAR(100));
+DECLARE @EngineEdition       INT           = CAST(SERVERPROPERTY('EngineEdition') AS INT);
+DECLARE @ProductVersion      NVARCHAR(100) = CAST(SERVERPROPERTY('ProductVersion') AS NVARCHAR(100));
+DECLARE @TotalRAM_GB         INT;
+DECLARE @CPUCount            INT;
+DECLARE @DatabaseCount       INT;
 
-SELECT TOP 1 @ServerEdition = SERVERPROPERTY('EDITION')
-INTO #TempEd FROM sys.dm_exec_results SET @EditionLevel = CAST(@ServerEdition / 10.
+SELECT @TotalRAM_GB = total_physical_memory_kb / 1024 / 1024 FROM sys.dm_os_sys_info;
+SELECT @CPUCount    = cpu_count FROM sys.dm_os_sys_info;
+SELECT @DatabaseCount = COUNT(*) FROM sys.databases WHERE state = 0;
 
-SET @TotalRAM = SUM(CASE WHEN physical_memory_mb IS NOT NULL THEN physicalMemoryMB ELSE 0 END) * 
-               FROM sys.fn_my_server_available_memory() AS MEMORYMB;  
-
-DECLARE @MaxCores INT = (SELECT SERVERPROPERTY('MAX_CPU'));
-DECLARE @CPUCount INT = CAST(MAX(CPU_COUNT) AS INT) FROM sys.dm_os_sys_info WITH(NOLOCK);
-
-PRINT 'Server Edition:' + @ServerEdition + '';
-PRINT 'Available Memory: ' + @TotalRAM + ' MB';  
-PRINT 'CPU Count: @@SERVERPROPERTY(''MAX_CPU_'')'';  
-print ''Database count: ''' + CAST(@DatabaseCount AS VARCHAR) + '';  
-
-IF @TotalRAM < 4096  
-BEGIN
-    PRINT 'WARNING: Less than 4GB RAM detected.';
-    PRINT 'Recommended Max Server Memory should be lower for production workloads';
-END
-ELSE    
-BEGIN  
-    PRINT 'Memory OK';
-END
-
+PRINT '  Edition:             ' + @ServerEdition;
+PRINT '  Engine Edition:      ' + CAST(@EngineEdition AS VARCHAR);
+PRINT '  Product Version:     ' + @ProductVersion;
+PRINT '  Total RAM (GB):      ' + CAST(@TotalRAM_GB AS VARCHAR);
+PRINT '  CPU Count:           ' + CAST(@CPUCount AS VARCHAR);
+PRINT '  Online Databases:    ' + CAST(@DatabaseCount AS VARCHAR);
 PRINT '';
 
 -- ============================================================================
--- SECTION 1: Instance-Level Settings (Require Restart)  
--- ============================================================================   
+-- SECTION 1: Instance-Level Settings (Read-Only Review)
+-- ============================================================================
 PRINT '--- SECTION 1: Instance-Level Settings ---';
-PRINT '--- Requires restart after execution ---';
 PRINT '';
 
-PRINT -- SECTION 1A: Advanced Options 
-'';
-PRINT 'Setting show advanced options to 1 (required for other settings):';
+DECLARE @Config TABLE (name NVARCHAR(128), value_in_use BIGINT, [description] NVARCHAR(255));
+DECLARE @CurrentValue BIGINT;
 
-EXEC sp_configure show advanced options', 1);  
-print ''Executing RECONFIGURE WITH OVERRIDE (requires passwordless admin)'';
-PRINT 'EXECUTE sp_configure 'RECONFIGURE WITH OVERRIDE';
-EXEC sp_configure 'show advanced options, 1'); 
-RECONFIGURE WITH OVERRIDE;
+INSERT @Config EXEC sp_configure;
 
-SET @CurrentValue = MAX(value_in_use) FROM sys.config_values WHERE name = 'MAXDEGREEOFParallellism';
-
-IF @CurrentValue != 0 AND SERVERPROPERTY('EDITION') NOT IN ('SQLSTANDARD'), 
-PRINT 'Recommendation: Set max degree of parallelism to ' + CAST(@CPUCount / 8 AS VARCHAR(1) + ''' or 0'';
-PRINT ''Rule of thumb: (number of physical cores) for OLTP; higher for data warehouse workloads'';  
-
-IF @CurrentValue = 0 AND @@SERVERPROPERTY(''engineedition'') != 3
-    BEGIN  
-        PRINT 'Recommendation For Enterprise SQL': Consider setting max DOP based on your core count.
-        PRINT ''Example: EXEC sp_configure 'max degree of parallelism', ' + CAST(@CPU / 8 AS VARCHAR) + '; RECONFIGURE WITH OVERRIDE;'';  
-    END  
-
+-- Max Degree of Parallelism
+SELECT @CurrentValue = value_in_use FROM @Config WHERE name = 'max degree of parallelism';
+PRINT '  Current MAXDOP: ' + CAST(ISNULL(@CurrentValue, 0) AS VARCHAR);
+PRINT '  Recommendation (OLTP): ' + CAST(@CPUCount / 8 AS VARCHAR) + ' or 0 (auto)';
+PRINT '  Recommendation (DW):   Higher values acceptable';
 PRINT '';
 
-PRINT 'Current cost threshold for parallelism:' + CAST(CONVERT(VARCHAR(8), DATEADD(DAY, -1 GETDATE()), 112)) + ;
-
-PRINT 'Recommendation For OLTP: Consider increasing costThresholdForParallelism from default 5 to higher values.';  
-PRINT ''Example for heavy OLTP workload: EXEC sp_configure 'cost threshold for parallelism', 50; RECONFIGURE;'';  
+-- Cost Threshold for Parallelism
+SELECT @CurrentValue = value_in_use FROM @Config WHERE name = 'cost threshold for parallelism';
+PRINT '  Current Cost Threshold: ' + CAST(ISNULL(@CurrentValue, 5) AS VARCHAR);
+PRINT '  Recommendation (OLTP):  Consider 25-50 for heavy OLTP';
 PRINT '';
 
+-- Max Server Memory
+SELECT @CurrentValue = value_in_use FROM @Config WHERE name = 'max server memory (MB)';
+DECLARE @RecommendedMem INT = @TotalRAM_GB * 1024 - CASE WHEN @TotalRAM_GB <= 8 THEN 2048 WHEN @TotalRAM_GB <= 32 THEN 4096 ELSE 8192 END;
+PRINT '  Current Max Server Memory (MB): ' + CAST(ISNULL(@CurrentValue, 0) AS VARCHAR);
+PRINT '  Recommended Max Server Memory: ' + CAST(@RecommendedMem AS VARCHAR) + ' MB (reserve '
+    + CASE WHEN @TotalRAM_GB <= 8 THEN '2 GB' WHEN @TotalRAM_GB <= 32 THEN '4 GB' ELSE '8 GB' END + ' for OS)';
 PRINT '';
--- SECTION 1C: Max Server Memory
-EXEC sp_configure show advanced options, 1');  
-RECONFIGURE WITH OVERRIDE';
 
-DECLARE @MaxMem INT = CASE @@SERVERPROPERTY(''engineedition'') WHEN 3 THEN CAST(@totalRAM-AS DECIMAL(182)) ELSE CAST(@totalRAM / 2 AS INT) END;  
-
-PRINT '';     
-print -- Max Server Memory Calculation
-'';  
-PRINT 'Recommended Max Server Memory: ''' + @MaxMem + '' MB';  
-PRINT ''Rule of thumb - Reserve room for OS (4GB minimum per process, plus additional buffers)'');
-
-EXECUTE sp_configure 'max server memory', @maxmem);  
-RECONFIGURE WITH OVERRIDE; 
-
-SET @CurrentValue = MAX(value_in_use) FROM sys.config_values WHERE name = 'MAXSEVERMEMORYMB';    
-
-PRINT '';    
-PRiNT ''Current Max Server Memory: ''' + CAST(CURRENTVALUE AS VARCHAR) + '';
-
+-- Optimize for Ad Hoc Workloads
+SELECT @CurrentValue = value_in_use FROM @Config WHERE name = 'optimize for ad hoc workloads';
+PRINT '  Current Optimize for Ad Hoc: ' + CASE WHEN ISNULL(@CurrentValue, 0) = 1 THEN 'Enabled' ELSE 'Disabled' END;
+PRINT '  Recommendation: Enable for varied workloads';
 PRINT '';
--- SECTION 1D: Query Store (SQL 2016+)  
-print -- Query Store Configuration Section
-'';  
 
-IF @@SERVERPROPERTY(''productlevel'') >= '2016' AND @@version LIKE '%QUERY_STORE%' 
-BEGIN    
-    DECLARE @db_cursor CURSOR FOR  
-    SELECT DB_NAME() AS dbname FROM sys.databases WHERE NAME NOT IN ('master', 'tempDB, 'model'), 
-             state_desc != 'offline';
+-- ============================================================================
+-- SECTION 2: Database-Level Settings (Read-Only Review)
+-- ============================================================================
+PRINT '--- SECTION 2: Database-Level Settings ---';
+PRINT '';
 
-    OPEN @db_cursor;
-FETCH NEXT INTO @currentdbname FROM @db_cursor;  
+DECLARE @dbName SYSNAME;
+DECLARE db_cursor CURSOR FOR
+SELECT name FROM sys.databases
+WHERE database_id > 4 AND state = 0 AND is_read_only = 0
+ORDER BY name;
 
-WHILE @@FETCH_STATUS = 0    
-BEGIN  
-    BEGIN TRY   
-        EXECUTE sp_configure 'max server memory' + CASE WHEN @CurrentDatabaseName IN ('master', 'tempdb') THEN '128' ELSE CAST(@maxmem AS VARCHAR END);
-        
-PRINT ''QUERYSTORE IS NOT AVAILABLE FOR ''' + @current_database_name + '''';  
-END CATCH     
-END  
+OPEN db_cursor;
+FETCH NEXT FROM db_cursor INTO @dbName;
 
-FETCH NEXT INTO currentdbname FROM db_cursor;  
+WHILE @@FETCH_STATUS = 0
+BEGIN
+    DECLARE @autoClose   VARCHAR(3), @autoShrink VARCHAR(3), @autoStats  VARCHAR(3), @pageVerify VARCHAR(20);
+    SELECT
+        @autoClose  = CASE WHEN is_auto_close_on = 1 THEN 'ON' ELSE 'OFF' END,
+        @autoShrink = CASE WHEN is_auto_shrink_on = 1 THEN 'ON' ELSE 'OFF' END,
+        @autoStats  = CASE WHEN is_auto_create_stats_on = 1 THEN 'ON' ELSE 'OFF' END,
+        @pageVerify = page_verify_option_desc
+    FROM sys.databases WHERE name = @dbName;
+
+    IF @autoClose = 'ON' OR @autoShrink = 'ON' OR @autoStats = 'OFF'
+    BEGIN
+        PRINT '  ' + @dbName + ':';
+        IF @autoClose = 'ON'  PRINT '    AUTO_CLOSE: ON  (recommend OFF)';
+        IF @autoShrink = 'ON' PRINT '    AUTO_SHRINK: ON (recommend OFF)';
+        IF @autoStats = 'OFF' PRINT '    AUTO_CREATE_STATISTICS: OFF (recommend ON)';
+        PRINT '';
+    END
+
+    FETCH NEXT FROM db_cursor INTO @dbName;
+END
+
 CLOSE db_cursor;
 DEALLOCATE db_cursor;
 
+-- ============================================================================
+-- SECTION 3: TempDB Recommendations
+-- ============================================================================
+PRINT '--- SECTION 3: TempDB Recommendations ---';
+PRINT '';
+
+DECLARE @TempFiles INT, @TempSizeMB INT;
+SELECT @TempFiles = COUNT(*) FROM tempdb.sys.database_files WHERE type = 0;
+SELECT @TempSizeMB = CAST(SUM(size) * 8 / 1024 AS INT) FROM tempdb.sys.database_files WHERE type = 0;
+
+PRINT '  Current TempDB data files: ' + CAST(@TempFiles AS VARCHAR);
+PRINT '  Current TempDB size (MB):  ' + CAST(@TempSizeMB AS VARCHAR);
+PRINT '  Recommendation: ' + CAST(CASE WHEN @CPUCount < 4 THEN 4 ELSE @CPUCount END AS VARCHAR) + ' data files (one per core, min 4)';
+PRINT '  Recommendation: Equal initial size for all files to prevent allocation contention';
 PRINT '';
 
 -- ============================================================================
--- SECTION 2: Database-Level Settings (Applies to all user databases)
--- ============================================================================   
-PRINT '--- SECTION 2: Database-Level Settings ---';      
-PRINT ''; 
-
-DECLARE @SQL NVARCHAR(MAX);  
-
-SELECT @sql = STRING_AGG(COAST ('ALTER DATABASE [' + name + '] SET AUTO_CLOSE OFF WITH ROLLBACK IMMEDIATE;');  
-        'ALTER DATABASE [' + name + '] SET AUTO_SHRINK OFF WITH ROLLBACK IMMEDIATE;');  
-        ALTER DATABASE ''' + name + 1] SET AUTO_CREATE_STATISTICS ON WITH ROLLBACK IMMEDIATE;') + '';',
-        ''ALTER DATABASE [' + name + '] SET AUTO_UPDATE_STATISTICS ON WITH ROLLBACK IMMEDIATE;', 
-        '') AS NVARCHAR(MAX), 'WHERE CASE WHEN recovery_model_desc = 'FULL' THEN 'FULL' ELSE 'SIMPLE' END + ';) ', CHAR(13))   
-FROM sys.databases  
-WHERE NAME NOT IN ('master', 'Model'), state_desc != 'offline'.  
-
-EXECUTE sp_executesql @sql;
-
-PRINT -- Applied AUTO_CLOSE, AutoShrink, Statistics settings to all user databases';  
+-- SECTION 4: Extended Events for Monitoring
+-- ============================================================================
+PRINT '--- SECTION 4: Extended Events (Read-Only Review) ---';
 PRINT '';
--- ============================================================================
--- SECTION 3: TempDB Optimization (Requires ALTER DATABASE on tempdb)
--- ============================================================================
-PRINT --- SECTION 3: TempDB Optimization ---'';       
-PRINT '';  
 
-SELECT 'USE [tempdb];' + CHAR(100 + ''') AS OptimizedFileSizeMB FROM sys.database_files  
-WHERE database_id = DB_ID('tempdb') AND type = 0.
-
-PRINT '';        
-PRINT 'TempDB Best Practices:'
-PRINT ''1 Create multiple data files (one per CPU core, min 4 files)';   
-PRINT '2 Set same initial size for all files to prevent imbalance';        
-PRINT '3 Enable trace flag 1118 (if pre-2016 SQL) or use default behavior in newer versions');           
-PRINT '4 Configure dedicated tempdb filegroup if using multiple data files'';  
-
--- ============================================================================
--- SECTION 4: Query Store Configuration  
--- ============================================================================   
-PRINT --- Section 4: Query Store Configuration ---'';      
-print -- Enable Query Store for analysis databases (not master, tempdb, model)
-''
-
-DECLARE @DBCursor CURSOR FOR  
-SELECT NAME FROM sys.databases WHERE state_desc != 'offline' AND is_read_only = 0.  
-
-OPEN #Qs_cursor;
-FETCH NEXT INTO @currentdbname FROM #qs_cursor;
-
-WHILE @@FETCH_STATUS = 0  
-BEGIN  
-BEGIN TRY   
-    DECLARE @sql NVARCHAR(MAX) = N''ALTER DATABASE [' + @CurrentDatabaseName + '] SET QUERY_STORE (ON)';
-   
-EXECUTE sp_executesql @sql);  
-
-PRINT ''QUERY_STORE ENABLED ON ''' + @current_database_name + ''; END CATCH; END  
-FETCH NEXT INTO currentdbname FROM qs_cursor.
-
-CLOSE #db_cursor  
-DEALLOCATE #db_cursor  
-
+IF EXISTS (SELECT * FROM sys.server_event_sessions WHERE name = 'blocking_sessions')
+    PRINT '  Session "blocking_sessions" already exists.';
+ELSE
+    PRINT '  Session "blocking_sessions" does not exist.';
 PRINT '';
 
 -- ============================================================================
--- SECTION 5: Extended Events for Monitoring (Blocking/Deadlocks)  
--- ============================================================================  
-PRINT --- Section 5: Extended Events Configuration ---'';    
-print ''Creating extended events session for blocking analysis.'');
-
-IF EXISTS (SELECT * FROM sys.server_event_sessions WHERE name = 'blockingsessions') 
-BEGIN    
-    DROP EVENT SESSION Blockingsessions ON SERVER;  
-END;
-
-CREATE EVENT SESSION [BlockedSessions] ON SERVER
-ADD EVENT sqlserver.sql_statement_completed,   
-ADD EVENT sqlserver.error_reported
-ADD TARGET package0.event_file(SET filename = 'blocked_sessions.xet', max_file_size = 1024);  
-
-ALTER EVENT SESSION BlockedSessions ON SERVER STATE = START;
-
-PRINT '';
-
--- ============================================================================  
--- SECTION 6: Manual Review Configuration Items  
--- ============================================================================  
-PRINT --- Section 6: Manual Review Items ---''    
-print ''The following settings require manual configuration:''
-''
-
-PRINT '1. Database Mail:'
-PRINT '-- Configure for alerts via SSMS > Management > Database Mail';        
-PRINT '';  
-
-PRINT '2. SQL Server Agent Alerts:'     
-PRINT '-- Add alerts for severity levels 016-020 (security/important events)');   
-PRINT '-- Add alert for severity > 200 for critical errors');      
-print '-- Consider enabling: ALTER SERVER CONFIGURATION SET (MAX_MEMORY_PERCENT = 95)%;
-PRINT '';  
-
-PRINT '3. Optimize For Ad-Hoc Workloads:'  
-PRINT -- If workload is varied, enable: EXEC sp_configure 'optimize for ad-hoc workloads', 1';    
-PRINT ''';
-
-PRINT '4. Remote Admin Connections:'     
-PRINT '-- Allow remote connections to SQL instance:'
-PRINT '-- EXEC sp_configure "remote admin connections", 1;');         
-PRINT '';
-
-PRINT '5. Contained Databases (AlwaysOn/AGs):'  
-print -- For availability groups, consider: ALTER DATABASE [YourDB] SET CONTAINMENT = PARTIAL'''; 
-
--- ============================================================================ 
--- SECTION 7: Verification Summary    
+-- SECTION 5: Manual Review Items
 -- ============================================================================
-print ''========================================';
-print ''Configuration Script Complete!';          
-PRINT '========================================';
+PRINT '--- SECTION 5: Manual Review Items ---';
+PRINT '';
+PRINT '  The following require manual configuration:';
+PRINT '    1. Database Mail - Configure via SSMS > Management > Database Mail';
+PRINT '    2. SQL Agent Alerts - Severity 016-020 alerts for security events';
+PRINT '    3. Remote Admin Connections - EXEC sp_configure ''remote admin connections'', 1;';
+PRINT '    4. Contained Databases - For Availability Groups, evaluate CONTAINMENT = PARTIAL';
 PRINT '';
 
-PRINT 'Next Steps:'
-''  
-PRINT '- Monitor Extended Events captured in BlockedSessions.xet files');
-PRINT -- Review query performance before applying settings to production workload);   
-PRINT '-- Verify restart requirement for instance-level changes'';  
-
+-- ============================================================================
+-- SECTION 6: Summary
+-- ============================================================================
+PRINT REPLICATE('=', 60);
+PRINT 'Review Complete';
+PRINT REPLICATE('=', 60);
 PRINT '';
-print ''Summary: Recommended Settings (Review Before Changing)';         
-PRINT '-- Max DOP: @@SERVERPROPERTY(''MAX_CPU_'') / 8 for OLTP, or higher for DW'''
-PRINT -- Cost Threshold: Keep default 5 for mixed workloads; consider >100 for pure OLTP'  
-PRiNT--Max Server Memory: Set based on available RAM minus 4GB buffer''
+PRINT '  This script is READ-ONLY. To apply changes, uncomment and run';
+PRINT '  the relevant EXEC sp_configure statements above after reviewing.';
+PRINT '  Some settings (max server memory, MAXDOP) require a restart.';
 PRINT '';
+PRINT '  To apply Max Server Memory (example):';
+PRINT '    EXEC sp_configure ''max server memory'', ' + CAST(@RecommendedMem AS VARCHAR) + ';';
+PRINT '    RECONFIGURE;';
+PRINT '';
+GO

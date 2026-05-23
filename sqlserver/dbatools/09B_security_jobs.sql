@@ -16,8 +16,6 @@ BEGIN
         @schedule_name = 'Daily8AM',
         @freq_type = 4, -- Daily
         @freq_interval = 1, -- Every 1 day
-        @freq_subday_type = 1, -- Run at the specified time
-        @freq_subday_interval = 0,
         @active_start_time = 080000; -- 8:00 AM in HHMMSS format
 END
 GO
